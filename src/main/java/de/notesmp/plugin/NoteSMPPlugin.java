@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 public final class NoteSMPPlugin extends JavaPlugin implements Listener, CommandExecutor {
     private HttpClient http;
@@ -99,7 +98,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         player.sendMessage("Checking your NoteSMP verification code…");
 
         postJson(botBase + "/minecraft/verify", body, response -> {
-            boolean success = response.statusCode() >= 200 && response.statusCode() < 300
+            boolean success = response != null && response.statusCode() >= 200 && response.statusCode() < 300
                     && response.body() != null && response.body().contains("\"ok\":true");
             getServer().getScheduler().runTask(this, () -> {
                 if (!player.isOnline()) return;
@@ -130,7 +129,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         payload.put("onlinePlayers", players);
         postJson(apiBase + "/v1/minecraft/heartbeat", toJson(payload), response -> {
             if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
-                getLogger().warning("Server heartbeat failed with HTTP " + response.statusCode());
+                getLogger().warning("Server heartbeat failed" + (response == null ? " (network error)" : " with HTTP " + response.statusCode()));
             }
         });
     }
@@ -161,8 +160,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         payload.put("baseStats", base);
         payload.put("statistics", statistics);
         postJson(botBase + "/minecraft/playerstats", toJson(payload), response -> {
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                getLogger().warning("Player-stat sync failed for " + player.getName() + " (HTTP " + response.statusCode() + ")");
+            if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
+                getLogger().warning("Player-stat sync failed for " + player.getName() + (response == null ? " (network error)" : " (HTTP " + response.statusCode() + ")"));
             }
         });
     }
