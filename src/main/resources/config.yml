@@ -1,0 +1,13 @@
+api:
+  base-url: "https://notesmp-api.notesmp-de.workers.dev"
+  bot-url: "https://notesmp-bot.notesmp-de.workers.dev"
+  # Set this to the same MINECRAFT_API_KEY secret used by both Cloudflare Workers.
+  key: "CHANGE_ME"
+
+heartbeat:
+  interval-seconds: 60
+
+statistics:
+  interval-seconds: 300
+  # Send every statistic tracked by Paper, including material/entity sub-statistics.
+  include-substatistics: true
