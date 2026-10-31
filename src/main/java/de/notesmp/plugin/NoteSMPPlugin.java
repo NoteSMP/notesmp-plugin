@@ -129,7 +129,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         payload.put("version", Bukkit.getMinecraftVersion());
         payload.put("onlinePlayers", players);
         postJson(apiBase + "/v1/minecraft/heartbeat", toJson(payload), response -> {
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
                 getLogger().warning("Server heartbeat failed with HTTP " + response.statusCode());
             }
         });
@@ -224,7 +224,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 .whenComplete((response, error) -> {
                     if (error != null) {
                         getLogger().warning("NoteSMP API request failed: " + error.getMessage());
-                        if (callback != null) callback.accept(new FailedResponse());
+                        if (callback != null) callback.accept(null);
                     } else if (callback != null) {
                         callback.accept(response);
                     }
@@ -283,14 +283,4 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         return quote(value.toString());
     }
 
-    private static final class FailedResponse extends java.net.http.HttpResponse<String> {
-        @Override public int statusCode() { return 599; }
-        @Override public java.net.http.HttpRequest request() { return null; }
-        @Override public Optional<java.net.http.HttpResponse<String>> previousResponse() { return Optional.empty(); }
-        @Override public java.util.Map<String, java.util.List<String>> headers() { return java.util.Map.of(); }
-        @Override public String body() { return ""; }
-        @Override public Optional<javax.net.ssl.SSLSession> sslSession() { return Optional.empty(); }
-        @Override public URI uri() { return URI.create("https://invalid.local"); }
-        @Override public java.net.http.HttpClient.Version version() { return java.net.http.HttpClient.Version.HTTP_1_1; }
-    }
 }
