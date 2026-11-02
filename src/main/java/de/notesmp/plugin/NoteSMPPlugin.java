@@ -34,6 +34,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     private String botBase;
     private String apiKey;
     private boolean includeSubstatistics;
+    private boolean statsSyncInProgress;
 
     @Override
     public void onEnable() {
@@ -167,10 +168,30 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     }
 
     private void sendAllPlayerStats() {
-        if (!ready()) return;
+        if (!ready() || statsSyncInProgress) return;
+
+        // Avoid collecting every offline player's complete statistic map in one server
+        // tick. Large player histories can otherwise cause a noticeable tick stall.
+        List<OfflinePlayer> players = new ArrayList<>();
         for (OfflinePlayer player : Bukkit.getOfflinePlayers()) {
-            if (player.getName() != null && player.hasPlayedBefore()) sendPlayerStats(player);
+            if (player.getName() != null && player.hasPlayedBefore()) players.add(player);
         }
+        if (players.isEmpty()) return;
+
+        statsSyncInProgress = true;
+        final int[] index = {0};
+        getServer().getScheduler().runTaskTimer(this, task -> {
+            if (!ready() || index[0] >= players.size()) {
+                statsSyncInProgress = false;
+                task.cancel();
+                return;
+            }
+            sendPlayerStats(players.get(index[0]++));
+            if (index[0] >= players.size()) {
+                statsSyncInProgress = false;
+                task.cancel();
+            }
+        }, 1L, 1L);
     }
 
     private void sendPlayerStats(OfflinePlayer player) {
