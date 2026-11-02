@@ -47,22 +47,43 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         if (apiKey.isBlank() || apiKey.equals("CHANGE_ME")) {
             getLogger().severe("Configure api.key in plugins/NoteSMP/config.yml before using API features.");
         }
+        if (!isHttpUrl(apiBase) || !isHttpUrl(botBase)) {
+            getLogger().severe("Invalid API URL in plugins/NoteSMP/config.yml. Both URLs must be valid HTTP(S) URLs.");
+        }
 
         getServer().getPluginManager().registerEvents(this, this);
         if (getCommand("verify") != null) getCommand("verify").setExecutor(this);
 
         long heartbeatTicks = Math.max(20L, getConfig().getLong("heartbeat.interval-seconds", 60L) * 20L);
         long statsTicks = Math.max(100L, getConfig().getLong("statistics.interval-seconds", 300L) * 20L);
-        getServer().getScheduler().runTaskTimer(this, this::sendHeartbeat, 20L, heartbeatTicks);
-        getServer().getScheduler().runTaskTimer(this, this::sendAllPlayerStats, 100L, statsTicks);
+        // Publish an initial state promptly after startup instead of waiting a full interval.
+        getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 20L);
+        getServer().getScheduler().runTaskTimer(this, this::sendHeartbeat, heartbeatTicks, heartbeatTicks);
+        getServer().getScheduler().runTaskLater(this, this::sendAllPlayerStats, 100L);
+        getServer().getScheduler().runTaskTimer(this, this::sendAllPlayerStats, statsTicks, statsTicks);
 
         getLogger().info("NoteSMP plugin enabled. Heartbeat and player-stat synchronization scheduled.");
     }
 
     @Override
     public void onDisable() {
-        if (http != null && !apiKey.isBlank() && !apiKey.equals("CHANGE_ME")) {
-            postJson(apiBase + "/v1/minecraft/offline", "{}", null);
+        // Wait briefly for the offline marker; asynchronous requests can be cancelled as
+        // the plugin/server shuts down, leaving the website stuck showing ONLINE.
+        if (ready()) {
+            try {
+                HttpRequest request = HttpRequest.newBuilder(URI.create(apiBase + "/v1/minecraft/offline"))
+                        .timeout(Duration.ofSeconds(5))
+                        .header("Authorization", "Bearer " + apiKey)
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                        .build();
+                HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    getLogger().warning("Could not mark server offline during shutdown (HTTP " + response.statusCode() + ").");
+                }
+            } catch (Exception exception) {
+                getLogger().warning("Could not mark server offline during shutdown: " + exception.getMessage());
+            }
         }
     }
 
@@ -113,7 +134,18 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     }
 
     private boolean ready() {
-        return http != null && !apiKey.isBlank() && !apiKey.equals("CHANGE_ME");
+        return http != null && isHttpUrl(apiBase) && isHttpUrl(botBase)
+                && !apiKey.isBlank() && !apiKey.equals("CHANGE_ME");
+    }
+
+    private static boolean isHttpUrl(String value) {
+        if (value == null || value.isBlank()) return false;
+        try {
+            String scheme = URI.create(value).getScheme();
+            return "https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme);
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     private void sendHeartbeat() {
