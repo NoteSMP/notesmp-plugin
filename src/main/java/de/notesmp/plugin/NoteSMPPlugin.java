@@ -195,11 +195,13 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (!command.getName().equalsIgnoreCase("notesmp") || args.length != 1) return List.of();
+        if (!command.getName().equalsIgnoreCase("notesmp") || args.length < 1 || args.length > 2) return List.of();
         List<String> suggestions = new ArrayList<>();
         String prefix = args[0].toLowerCase(Locale.ROOT);
-        if ("version".startsWith(prefix)) suggestions.add("version");
-        if (sender.hasPermission("notesmp.update") && "update".startsWith(prefix)) suggestions.add("update");
+        if (args.length == 1) {
+            if ("version".startsWith(prefix)) suggestions.add("version");
+            if (sender.hasPermission("notesmp.update") && "update".startsWith(prefix)) suggestions.add("update");
+        }
         if (sender.hasPermission("notesmp.activitylog") && "activitylog".startsWith(prefix)) suggestions.add("activitylog");
         if (args.length == 2 && args[0].equalsIgnoreCase("activitylog") && sender.hasPermission("notesmp.activitylog")) {
             if ("on".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("on");
@@ -246,6 +248,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     private void checkForUpdate(CommandSender requester) {
         try {
+            activityLog("Fetching GitHub release metadata for plugin update check");
             HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.github.com/repos/NoteSMP/notesmp-plugin/releases?per_page=100"))
                     .timeout(Duration.ofSeconds(15)).header("Accept", "application/vnd.github+json").GET().build();
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
@@ -384,7 +387,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     }
 
     private void sendHeartbeat() {
-        if (!ready()) return;
+        if (!ready()) { activityLog("Heartbeat skipped: API is not configured"); return; }
+        activityLog("Sending heartbeat; online players=" + Bukkit.getOnlinePlayers().size());
         List<String> players = new ArrayList<>();
         for (Player player : Bukkit.getOnlinePlayers()) players.add(player.getName());
 
@@ -410,8 +414,9 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         for (OfflinePlayer player : Bukkit.getOfflinePlayers()) {
             if (player.getName() != null && player.hasPlayedBefore()) players.add(player);
         }
-        if (players.isEmpty()) return;
+        if (players.isEmpty()) { activityLog("Player-stat sync skipped: no known players"); return; }
 
+        activityLog("Starting full player-stat sync for " + players.size() + " player records");
         statsSyncInProgress = true;
         final int[] index = {0};
         getServer().getScheduler().runTaskTimer(this, task -> {
@@ -431,6 +436,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     private void sendPlayerStats(OfflinePlayer player) {
         if (!ready() || player.getName() == null) return;
         UUID uuid = player.getUniqueId();
+        activityLog("Collecting detailed statistics for " + player.getName() + " (" + uuid + ")");
         Map<String, Object> base = new LinkedHashMap<>();
         base.put("playtime_seconds", Math.max(0, player.getStatistic(Statistic.PLAY_ONE_MINUTE) / 20L));
         base.put("blocks_broken", sumMaterialStatistic(player, Statistic.MINE_BLOCK, true));
@@ -439,6 +445,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         base.put("kills", player.getStatistic(Statistic.PLAYER_KILLS));
 
         Map<String, Object> statistics = collectStatistics(player);
+        activityLog("Collected " + statistics.size() + " statistic entries for " + player.getName());
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("uuid", uuid.toString());
         payload.put("username", player.getName());
