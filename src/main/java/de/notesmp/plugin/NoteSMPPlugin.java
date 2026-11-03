@@ -7,6 +7,7 @@ import org.bukkit.Statistic;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -28,7 +29,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
-public final class NoteSMPPlugin extends JavaPlugin implements Listener, CommandExecutor {
+public final class NoteSMPPlugin extends JavaPlugin implements Listener, CommandExecutor, TabCompleter {
     private HttpClient http;
     private String apiBase;
     private String botBase;
@@ -59,7 +60,10 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
         getServer().getPluginManager().registerEvents(this, this);
         if (getCommand("verify") != null) getCommand("verify").setExecutor(this);
-        if (getCommand("notesmp") != null) getCommand("notesmp").setExecutor(this);
+        if (getCommand("notesmp") != null) {
+            getCommand("notesmp").setExecutor(this);
+            getCommand("notesmp").setTabCompleter(this);
+        }
 
         long heartbeatTicks = Math.max(20L, getConfig().getLong("heartbeat.interval-seconds", 60L) * 20L);
         long statsTicks = Math.max(100L, getConfig().getLong("statistics.interval-seconds", 300L) * 20L);
@@ -112,11 +116,13 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (command.getName().equalsIgnoreCase("notesmp")) {
-            if (args.length == 1 && args[0].equalsIgnoreCase("update") && sender.hasPermission("notesmp.update")) {
+            if (args.length == 1 && args[0].equalsIgnoreCase("version")) {
+                sender.sendMessage("[NoteSMP] Running version " + getPluginMeta().getVersion() + ".");
+            } else if (args.length == 1 && args[0].equalsIgnoreCase("update") && sender.hasPermission("notesmp.update")) {
                 sender.sendMessage("Checking latest NoteSMP release...");
                 getServer().getScheduler().runTaskAsynchronously(this, () -> checkForUpdate(sender));
             } else {
-                sender.sendMessage(sender.hasPermission("notesmp.update") ? "Usage: /notesmp update" : "You do not have permission.");
+                sender.sendMessage(sender.hasPermission("notesmp.update") ? "Usage: /notesmp <update|version>" : "Usage: /notesmp version");
             }
             return true;
         }
@@ -152,6 +158,16 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             });
         });
         return true;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!command.getName().equalsIgnoreCase("notesmp") || args.length != 1) return List.of();
+        List<String> suggestions = new ArrayList<>();
+        String prefix = args[0].toLowerCase(Locale.ROOT);
+        if ("version".startsWith(prefix)) suggestions.add("version");
+        if (sender.hasPermission("notesmp.update") && "update".startsWith(prefix)) suggestions.add("update");
+        return suggestions;
     }
 
     private void logUpdateNotice() {
