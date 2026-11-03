@@ -63,6 +63,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         getServer().getScheduler().runTaskLater(this, this::sendAllPlayerStats, 100L);
         getServer().getScheduler().runTaskTimer(this, this::sendAllPlayerStats, statsTicks, statsTicks);
 
+        scheduleUpdateCheck();
         getLogger().info("NoteSMP plugin enabled. Heartbeat and player-stat synchronization scheduled.");
     }
 
@@ -132,6 +133,74 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             });
         });
         return true;
+    }
+
+    private void scheduleUpdateCheck() {
+        if (!getConfig().getBoolean("updates.enabled", true)) return;
+        long interval = Math.max(30L, getConfig().getLong("updates.check-interval-minutes", 360L));
+        getServer().getScheduler().runTaskLaterAsynchronously(this, this::checkForUpdate, 600L);
+        getServer().getScheduler().runTaskTimerAsynchronously(this, this::checkForUpdate, interval * 1200L, interval * 1200L);
+    }
+
+    private void checkForUpdate() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.github.com/repos/NoteSMP/notesmp-plugin/releases/latest"))
+                    .timeout(Duration.ofSeconds(15)).header("Accept", "application/vnd.github+json").GET().build();
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 404) return;
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                getLogger().warning("GitHub update check returned HTTP " + response.statusCode()); return;
+            }
+            String tag = jsonString(response.body(), "tag_name");
+            String latest = tag == null ? null : tag.replaceFirst("^[vV]", "");
+            if (latest == null || !isNewerVersion(latest, getPluginMeta().getVersion())) return;
+
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                    "\\\"browser_download_url\\\"\\s*:\\s*\\\"(https://github\\.com/NoteSMP/notesmp-plugin/releases/download/[^\\\"\\s]+\\.jar)\\\"")
+                    .matcher(response.body());
+            if (!m.find()) { getLogger().warning("Release " + tag + " has no JAR asset."); return; }
+            String url = m.group(1);
+            HttpResponse<byte[]> jar = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60)).GET().build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
+            if (jar.statusCode() < 200 || jar.statusCode() >= 300 || jar.body().length < 1024 || jar.body().length > 50 * 1024 * 1024) {
+                getLogger().warning("Update JAR download failed or had an invalid size (HTTP " + jar.statusCode() + ")."); return;
+            }
+            java.nio.file.Path dir = getDataFolder().getParentFile().toPath().resolve("update");
+            java.nio.file.Files.createDirectories(dir);
+            // Stage under the current JAR's exact filename so Paper can safely swap it at startup.
+            String installedName = getFile().getName();
+            java.nio.file.Path target = dir.resolve(installedName);
+            java.nio.file.Path temp = dir.resolve(installedName + ".part");
+            java.nio.file.Files.write(temp, jar.body());
+            try {
+                java.nio.file.Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                java.nio.file.Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            getLogger().info("Downloaded NoteSMP " + tag + " to plugins/update/" + installedName
+                    + ". Restart the server to apply it; the server will not be restarted automatically.");
+        } catch (Exception ex) {
+            getLogger().warning("Automatic update check failed: " + ex.getMessage());
+        }
+    }
+
+    private static String jsonString(String json, String key) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                "\\\"" + java.util.regex.Pattern.quote(key) + "\\\"\\s*:\\s*\\\"((?:\\\\.|[^\\\"\\\\])*)\\\"").matcher(json);
+        if (!m.find()) return null;
+        return m.group(1).replace("\\\\/", "/").replace("\\\\\"", "\\\"").replace("\\\\\\\\", "\\\\");
+    }
+
+    private static boolean isNewerVersion(String candidate, String current) {
+        String[] a = candidate.split("[.-]"), b = current.replaceFirst("^[vV]", "").split("[.-]");
+        for (int i = 0; i < Math.max(a.length, b.length); i++) {
+            String x = i < a.length ? a[i] : "0", y = i < b.length ? b[i] : "0";
+            int cmp;
+            try { cmp = Long.compare(Long.parseLong(x), Long.parseLong(y)); }
+            catch (NumberFormatException ignored) { cmp = x.compareToIgnoreCase(y); }
+            if (cmp != 0) return cmp > 0;
+        }
+        return false;
     }
 
     private boolean ready() {
