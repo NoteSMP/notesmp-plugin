@@ -64,7 +64,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         getServer().getScheduler().runTaskTimer(this, this::sendAllPlayerStats, statsTicks, statsTicks);
 
         scheduleUpdateCheck();
-        getLogger().info("NoteSMP plugin enabled. Heartbeat and player-stat synchronization scheduled.");
+        getLogger().info("§x§F§6§A§F§2§2Note§x§E§6§7§C§1§5SMP§r plugin enabled. Heartbeat and player-stat synchronization scheduled.");
     }
 
     @Override
@@ -81,7 +81,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                         .build();
                 HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    getLogger().warning("Could not mark server offline during shutdown (HTTP " + response.statusCode() + ").");
+                    getLogger().warning("§x§F§6§A§F§2§2Note§x§E§6§7§C§1§5SMP§r Could not mark server offline during shutdown (HTTP " + response.statusCode() + ").");
                 }
             } catch (Exception exception) {
                 getLogger().warning("Could not mark server offline during shutdown: " + exception.getMessage());
@@ -91,12 +91,16 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
+        // Publish count/list immediately after Bukkit updates the online-player collection.
+        getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 1L);
         getServer().getScheduler().runTaskLater(this, () -> sendPlayerStats(event.getPlayer()), 40L);
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         sendPlayerStats(event.getPlayer());
+        // Delay one tick so the departing player is no longer counted.
+        getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 1L);
     }
 
     @Override
