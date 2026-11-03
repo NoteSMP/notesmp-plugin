@@ -105,7 +105,9 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     private void syncPlayerAdvancements(Player player) {
         if (!ready() || !player.isOnline()) return;
         List<Map<String, Object>> earned = new ArrayList<>();
-        for (org.bukkit.advancement.Advancement advancement : Bukkit.advancementIterator()) {
+        java.util.Iterator<org.bukkit.advancement.Advancement> iterator = Bukkit.advancementIterator();
+        while (iterator.hasNext()) {
+            org.bukkit.advancement.Advancement advancement = iterator.next();
             org.bukkit.advancement.AdvancementProgress progress = player.getAdvancementProgress(advancement);
             if (!progress.isDone()) continue;
             Instant earnedAt = Instant.now();
