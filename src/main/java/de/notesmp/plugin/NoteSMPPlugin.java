@@ -14,6 +14,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerAdvancementDoneEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.net.URI;
@@ -99,6 +100,25 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 consoleLog("WARN", "Could not mark server offline during shutdown: " + exception.getMessage());
             }
         }
+    }
+
+    @EventHandler
+    public void onAdvancementDone(PlayerAdvancementDoneEvent event) {
+        if (!ready()) return;
+        Player player = event.getPlayer();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("uuid", player.getUniqueId().toString());
+        payload.put("username", player.getName());
+        payload.put("advancementId", event.getAdvancement().getKey().toString());
+        payload.put("title", event.getAdvancement().getKey().getKey().replace('_', ' '));
+        payload.put("earnedAt", Instant.now().toString());
+        activityLog("Advancement earned by " + player.getName() + ": " + event.getAdvancement().getKey());
+        postJson(apiBase + "/v1/minecraft/advancement", toJson(payload), response -> {
+            if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
+                consoleLog("WARN", "Advancement sync failed for " + player.getName()
+                        + (response == null ? " (network error)" : " (HTTP " + response.statusCode() + ")"));
+            }
+        });
     }
 
     @EventHandler
