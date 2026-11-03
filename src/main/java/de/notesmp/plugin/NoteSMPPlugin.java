@@ -36,6 +36,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     private String apiKey;
     private boolean includeSubstatistics;
     private boolean statsSyncInProgress;
+    private boolean activityLogEnabled;
 
     @Override
     public void onEnable() {
@@ -45,6 +46,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         botBase = trimSlash(getConfig().getString("api.bot-url", "https://notesmp-bot.notesmp-de.workers.dev"));
         apiKey = getConfig().getString("api.key", "").trim();
         includeSubstatistics = getConfig().getBoolean("statistics.include-substatistics", true);
+        activityLogEnabled = getConfig().getBoolean("activity-log.enabled", false);
         http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(8))
                 // GitHub release asset URLs redirect to the actual asset host.
@@ -120,9 +122,20 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 sender.sendMessage("[NoteSMP] Running version " + getPluginMeta().getVersion() + ".");
             } else if (args.length == 1 && args[0].equalsIgnoreCase("update") && sender.hasPermission("notesmp.update")) {
                 sender.sendMessage("Checking latest NoteSMP release...");
+                activityLog("Manual plugin update check requested by " + sender.getName());
                 getServer().getScheduler().runTaskAsynchronously(this, () -> checkForUpdate(sender));
+            } else if (args.length == 2 && args[0].equalsIgnoreCase("activitylog") && sender.hasPermission("notesmp.activitylog")) {
+                if (!args[1].equalsIgnoreCase("on") && !args[1].equalsIgnoreCase("off")) {
+                    sender.sendMessage("Usage: /notesmp activitylog <on|off>");
+                } else {
+                    activityLogEnabled = args[1].equalsIgnoreCase("on");
+                    getConfig().set("activity-log.enabled", activityLogEnabled);
+                    saveConfig();
+                    sender.sendMessage("NoteSMP detailed activity log is " + (activityLogEnabled ? "enabled" : "disabled") + ".");
+                    consoleLog("INFO", "Detailed activity log " + (activityLogEnabled ? "enabled" : "disabled") + " by " + sender.getName() + ".");
+                }
             } else {
-                sender.sendMessage(sender.hasPermission("notesmp.update") ? "Usage: /notesmp <update|version>" : "Usage: /notesmp version");
+                sender.sendMessage(sender.hasPermission("notesmp.update") ? "Usage: /notesmp <update|version|activitylog on|off>" : "Usage: /notesmp version");
             }
             return true;
         }
@@ -167,7 +180,16 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         String prefix = args[0].toLowerCase(Locale.ROOT);
         if ("version".startsWith(prefix)) suggestions.add("version");
         if (sender.hasPermission("notesmp.update") && "update".startsWith(prefix)) suggestions.add("update");
+        if (sender.hasPermission("notesmp.activitylog") && "activitylog".startsWith(prefix)) suggestions.add("activitylog");
+        if (args.length == 2 && args[0].equalsIgnoreCase("activitylog") && sender.hasPermission("notesmp.activitylog")) {
+            if ("on".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("on");
+            if ("off".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("off");
+        }
         return suggestions;
+    }
+
+    private void activityLog(String message) {
+        if (activityLogEnabled) consoleLog("INFO", "[activity] " + message);
     }
 
     private void consoleLog(String level, String message) {
@@ -458,6 +480,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     }
 
     private void postJson(String url, String body, java.util.function.Consumer<HttpResponse<String>> callback) {
+        activityLog("HTTP POST " + url + " payload=" + body);
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(15))
                 .header("Authorization", "Bearer " + apiKey)
@@ -466,6 +489,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 .build();
         http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .whenComplete((response, error) -> {
+                    activityLog("HTTP result " + url + " -> " + (error != null ? "ERROR " + error.getMessage() : "HTTP " + response.statusCode()));
                     if (error != null) {
                         consoleLog("WARN", "NoteSMP API request failed: " + error.getMessage());
                         if (callback != null) callback.accept(null);
