@@ -195,7 +195,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     private void checkForUpdate(CommandSender requester) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.github.com/repos/NoteSMP/notesmp-plugin/releases/latest"))
+            HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.github.com/repos/NoteSMP/notesmp-plugin/releases?per_page=1"))
                     .timeout(Duration.ofSeconds(15)).header("Accept", "application/vnd.github+json").GET().build();
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 404) return;
@@ -252,15 +252,24 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     }
 
     private static boolean isNewerVersion(String candidate, String current) {
-        String[] a = candidate.split("[.-]"), b = current.replaceFirst("^[vV]", "").split("[.-]");
-        for (int i = 0; i < Math.max(a.length, b.length); i++) {
-            String x = i < a.length ? a[i] : "0", y = i < b.length ? b[i] : "0";
-            int cmp;
-            try { cmp = Long.compare(Long.parseLong(x), Long.parseLong(y)); }
-            catch (NumberFormatException ignored) { cmp = x.compareToIgnoreCase(y); }
-            if (cmp != 0) return cmp > 0;
+        String[] a = candidate.replaceFirst("^[vV]", "").split("-", 2);
+        String[] b = current.replaceFirst("^[vV]", "").split("-", 2);
+        String[] an = a[0].split("\\."), bn = b[0].split("\\.");
+        for (int i = 0; i < Math.max(an.length, bn.length); i++) {
+            long x = i < an.length ? parseNumeric(an[i]) : 0L;
+            long y = i < bn.length ? parseNumeric(bn[i]) : 0L;
+            if (x != y) return x > y;
         }
+        // A stable release outranks a prerelease with the same numeric core.
+        if (a.length == 1 && b.length > 1) return true;
+        if (a.length > 1 && b.length == 1) return false;
+        if (a.length > 1) return a[1].compareToIgnoreCase(b[1]) > 0;
         return false;
+    }
+
+    private static long parseNumeric(String value) {
+        try { return Long.parseLong(value); }
+        catch (NumberFormatException ignored) { return 0L; }
     }
 
     private boolean ready() {
