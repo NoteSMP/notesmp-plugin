@@ -1,15 +1,22 @@
 name: NoteSMP
-version: 1.0.1
+version: 1.0.2
 main: de.notesmp.plugin.NoteSMPPlugin
 api-version: '26.3'
 description: NoteSMP API heartbeat, player statistics and Discord account verification.
 authors: [NoteSMP]
 commands:
+  notesmp:
+    description: NoteSMP plugin utilities.
+    usage: /notesmp update
+    permission: notesmp.update
   verify:
     description: Link your Minecraft account to your NoteSMP Discord account.
     usage: /verify <six-digit-code>
     permission: notesmp.verify
 permissions:
+  notesmp.update:
+    description: Allows checking and staging NoteSMP plugin updates.
+    default: op
   notesmp.verify:
     description: Allows a player to link their Minecraft account.
     default: true
