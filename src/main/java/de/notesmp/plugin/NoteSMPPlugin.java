@@ -202,7 +202,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             if ("version".startsWith(prefix)) suggestions.add("version");
             if (sender.hasPermission("notesmp.update") && "update".startsWith(prefix)) suggestions.add("update");
         }
-        if (sender.hasPermission("notesmp.activitylog") && "activitylog".startsWith(prefix)) suggestions.add("activitylog");
+        if (args.length == 1 && sender.hasPermission("notesmp.activitylog") && "activitylog".startsWith(prefix)) suggestions.add("activitylog");
         if (args.length == 2 && args[0].equalsIgnoreCase("activitylog") && sender.hasPermission("notesmp.activitylog")) {
             if ("on".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("on");
             if ("off".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("off");
