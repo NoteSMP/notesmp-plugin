@@ -68,7 +68,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         getServer().getScheduler().runTaskTimer(this, this::sendAllPlayerStats, statsTicks, statsTicks);
 
         scheduleUpdateCheck();
-        getLogger().info("§x§F§6§A§F§2§2Note§x§E§6§7§C§1§5SMP§r plugin enabled. Heartbeat and player-stat synchronization scheduled.");
+        getLogger().info("§6[NoteSMP]§r plugin enabled. Heartbeat and player-stat synchronization scheduled.");
     }
 
     @Override
@@ -85,7 +85,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                         .build();
                 HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    getLogger().warning("§x§F§6§A§F§2§2Note§x§E§6§7§C§1§5SMP§r Could not mark server offline during shutdown (HTTP " + response.statusCode() + ").");
+                    getLogger().warning("§6[NoteSMP]§r Could not mark server offline during shutdown (HTTP " + response.statusCode() + ").");
                 }
             } catch (Exception exception) {
                 getLogger().warning("Could not mark server offline during shutdown: " + exception.getMessage());
