@@ -38,6 +38,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     @Override
     public void onEnable() {
+        logUpdateNotice();
         saveDefaultConfig();
         apiBase = trimSlash(getConfig().getString("api.base-url", "https://notesmp-api.notesmp-de.workers.dev"));
         botBase = trimSlash(getConfig().getString("api.bot-url", "https://notesmp-bot.notesmp-de.workers.dev"));
@@ -197,12 +198,13 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             java.nio.file.Path target = dir.resolve(installedName);
             java.nio.file.Path temp = dir.resolve(installedName + ".part");
             java.nio.file.Files.write(temp, jar.body());
-            java.nio.file.Files.writeString(getDataFolder().toPath().resolve("pending-update.txt"), tag + "\n" + (commit == null ? "unknown" : commit));
             try {
                 java.nio.file.Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
             } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
                 java.nio.file.Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
+            // Write the success marker only after the complete JAR is staged.
+            java.nio.file.Files.writeString(getDataFolder().toPath().resolve("pending-update.txt"), tag + "\n" + (commit == null ? "unknown" : commit));
             getLogger().info("Downloaded NoteSMP " + tag + " to plugins/update/" + installedName
                     + ". Restart the server to apply it; the server will not be restarted automatically.");
         } catch (Exception ex) {
