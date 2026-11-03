@@ -68,7 +68,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         getServer().getScheduler().runTaskTimer(this, this::sendAllPlayerStats, statsTicks, statsTicks);
 
         scheduleUpdateCheck();
-        getLogger().info("§6[NoteSMP]§r plugin enabled. Heartbeat and player-stat synchronization scheduled.");
+        getLogger().info("[NoteSMP] plugin enabled. Heartbeat and player-stat synchronization scheduled.");
     }
 
     @Override
@@ -143,6 +143,21 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         return true;
     }
 
+    private void logUpdateNotice() {
+        java.nio.file.Path notice = getDataFolder().toPath().resolve("pending-update.txt");
+        if (!java.nio.file.Files.exists(notice)) return;
+        try {
+            List<String> lines = java.nio.file.Files.readAllLines(notice);
+            String tag = lines.isEmpty() ? "unknown" : lines.get(0).trim();
+            String commit = lines.size() < 2 ? "unknown" : lines.get(1).trim();
+            String shortCommit = commit.length() > 7 ? commit.substring(0, 7) : commit;
+            getLogger().info("Plugin updated to " + tag + " — Commit[" + shortCommit + "](https://github.com/NoteSMP/notesmp-plugin/commit/" + commit + ")");
+            java.nio.file.Files.deleteIfExists(notice);
+        } catch (Exception e) {
+            getLogger().warning("Could not read plugin update notice: " + e.getMessage());
+        }
+    }
+
     private void scheduleUpdateCheck() {
         if (!getConfig().getBoolean("updates.enabled", true)) return;
         long interval = Math.max(30L, getConfig().getLong("updates.check-interval-minutes", 360L));
@@ -161,6 +176,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 getLogger().warning("GitHub update check returned HTTP " + response.statusCode()); return;
             }
             String tag = jsonString(response.body(), "tag_name");
+            String commit = jsonString(response.body(), "target_commitish");
             String latest = tag == null ? null : tag.replaceFirst("^[vV]", "");
             if (latest == null || !isNewerVersion(latest, getPluginMeta().getVersion())) return;
 
@@ -181,6 +197,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             java.nio.file.Path target = dir.resolve(installedName);
             java.nio.file.Path temp = dir.resolve(installedName + ".part");
             java.nio.file.Files.write(temp, jar.body());
+            java.nio.file.Files.writeString(getDataFolder().toPath().resolve("pending-update.txt"), tag + "\n" + (commit == null ? "unknown" : commit));
             try {
                 java.nio.file.Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
             } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
