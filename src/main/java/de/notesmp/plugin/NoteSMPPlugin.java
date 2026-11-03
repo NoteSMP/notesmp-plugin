@@ -212,9 +212,19 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 consoleLog("WARN", "GitHub update check returned HTTP " + response.statusCode()); return;
             }
             String tag = jsonString(response.body(), "tag_name");
+            String releaseName = jsonString(response.body(), "name");
             String commit = jsonString(response.body(), "target_commitish");
-            String latest = tag == null ? null : tag.replaceFirst("^[vV]", "");
-            if (latest == null || !isNewerVersion(latest, getPluginMeta().getVersion())) { replyUpdate(requester, "NoteSMP v" + getPluginMeta().getVersion() + " is up to date. No update queued."); return; }
+            // GitHub build releases use internal tags such as "build-31". Compare the
+            // plugin version from the release title, not that internal tag.
+            String latest = releaseName == null ? null
+                    : releaseName.replaceFirst("^NoteSMP\\s+Plugin\\s+", "").trim();
+            if (latest == null || latest.equals(releaseName)) {
+                latest = tag == null ? null : tag.replaceFirst("^[vV]", "");
+            }
+            if (latest == null || !isNewerVersion(latest, getPluginMeta().getVersion())) {
+                replyUpdate(requester, "NoteSMP v" + getPluginMeta().getVersion() + " is up to date. No update queued.");
+                return;
+            }
 
             java.util.regex.Matcher m = java.util.regex.Pattern.compile(
                     "\\\"browser_download_url\\\"\\s*:\\s*\\\"(https://github\\.com/NoteSMP/notesmp-plugin/releases/download/[^\\\"\\s]+\\.jar)\\\"")
