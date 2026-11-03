@@ -59,6 +59,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
         getServer().getPluginManager().registerEvents(this, this);
         if (getCommand("verify") != null) getCommand("verify").setExecutor(this);
+        if (getCommand("notesmp") != null) getCommand("notesmp").setExecutor(this);
 
         long heartbeatTicks = Math.max(20L, getConfig().getLong("heartbeat.interval-seconds", 60L) * 20L);
         long statsTicks = Math.max(100L, getConfig().getLong("statistics.interval-seconds", 300L) * 20L);
@@ -110,6 +111,15 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (command.getName().equalsIgnoreCase("notesmp")) {
+            if (args.length == 1 && args[0].equalsIgnoreCase("update") && sender.hasPermission("notesmp.update")) {
+                sender.sendMessage("Checking latest NoteSMP release...");
+                getServer().getScheduler().runTaskAsynchronously(this, () -> checkForUpdate(sender));
+            } else {
+                sender.sendMessage(sender.hasPermission("notesmp.update") ? "Usage: /notesmp update" : "You do not have permission.");
+            }
+            return true;
+        }
         if (!(sender instanceof Player player)) {
             sender.sendMessage("This command can only be used in-game.");
             return true;
@@ -163,11 +173,11 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         if (!getConfig().getBoolean("updates.enabled", true)) return;
         long interval = Math.max(30L, getConfig().getLong("updates.check-interval-minutes", 360L));
         // Check shortly after enable so a pending release is staged before the next restart.
-        getServer().getScheduler().runTaskLaterAsynchronously(this, this::checkForUpdate, 40L);
-        getServer().getScheduler().runTaskTimerAsynchronously(this, this::checkForUpdate, interval * 1200L, interval * 1200L);
+        getServer().getScheduler().runTaskLaterAsynchronously(this, () -> checkForUpdate(null), 40L);
+        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> checkForUpdate(null), interval * 1200L, interval * 1200L);
     }
 
-    private void checkForUpdate() {
+    private void checkForUpdate(CommandSender requester) {
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.github.com/repos/NoteSMP/notesmp-plugin/releases/latest"))
                     .timeout(Duration.ofSeconds(15)).header("Accept", "application/vnd.github+json").GET().build();
@@ -179,7 +189,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             String tag = jsonString(response.body(), "tag_name");
             String commit = jsonString(response.body(), "target_commitish");
             String latest = tag == null ? null : tag.replaceFirst("^[vV]", "");
-            if (latest == null || !isNewerVersion(latest, getPluginMeta().getVersion())) return;
+            if (latest == null || !isNewerVersion(latest, getPluginMeta().getVersion())) { replyUpdate(requester, "NoteSMP v" + getPluginMeta().getVersion() + " is up to date. No update queued."); return; }
 
             java.util.regex.Matcher m = java.util.regex.Pattern.compile(
                     "\\\"browser_download_url\\\"\\s*:\\s*\\\"(https://github\\.com/NoteSMP/notesmp-plugin/releases/download/[^\\\"\\s]+\\.jar)\\\"")
@@ -205,11 +215,17 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             }
             // Write the success marker only after the complete JAR is staged.
             java.nio.file.Files.writeString(getDataFolder().toPath().resolve("pending-update.txt"), tag + "\n" + (commit == null ? "unknown" : commit));
-            getLogger().info("Downloaded NoteSMP " + tag + " to plugins/update/" + installedName
-                    + ". Restart the server to apply it; the server will not be restarted automatically.");
+            String updateMessage = "Downloaded NoteSMP " + tag + " to plugins/update/" + installedName + ". Restart the server to apply it; the server will not be restarted automatically.";
+            getLogger().info(updateMessage);
+            replyUpdate(requester, updateMessage);
         } catch (Exception ex) {
-            getLogger().warning("Automatic update check failed: " + ex.getMessage());
+            getLogger().warning("Update check failed: " + ex.getMessage());
+            replyUpdate(requester, "Update check failed: " + ex.getMessage());
         }
+    }
+
+    private void replyUpdate(CommandSender requester, String message) {
+        if (requester != null) getServer().getScheduler().runTask(this, () -> requester.sendMessage("[NoteSMP] " + message));
     }
 
     private static String jsonString(String json, String key) {
