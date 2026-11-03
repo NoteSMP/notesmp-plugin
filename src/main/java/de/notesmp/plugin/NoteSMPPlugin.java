@@ -470,27 +470,27 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             try {
                 if (statistic.getType() == Statistic.Type.UNTYPED) {
                     int value = player.getStatistic(statistic);
-                    if (value != 0) values.put(baseId, value);
+                    values.put(baseId, value);
                 } else if (includeSubstatistics && statistic.getType() == Statistic.Type.BLOCK) {
                     for (Material material : Material.values()) {
                         if (!material.isBlock()) continue;
                         try {
                             int value = player.getStatistic(statistic, material);
-                            if (value != 0) values.put(baseId + ":" + material.getKey(), value);
+                            values.put(baseId + ":" + material.getKey(), value);
                         } catch (IllegalArgumentException ignored) { }
                     }
                 } else if (includeSubstatistics && statistic.getType() == Statistic.Type.ITEM) {
                     for (Material material : Material.values()) {
                         try {
                             int value = player.getStatistic(statistic, material);
-                            if (value != 0) values.put(baseId + ":" + material.getKey(), value);
+                            values.put(baseId + ":" + material.getKey(), value);
                         } catch (IllegalArgumentException ignored) { }
                     }
                 } else if (includeSubstatistics && statistic.getType() == Statistic.Type.ENTITY) {
                     for (EntityType entityType : EntityType.values()) {
                         try {
                             int value = player.getStatistic(statistic, entityType);
-                            if (value != 0) values.put(baseId + ":" + entityType.getKey(), value);
+                            values.put(baseId + ":" + entityType.getKey(), value);
                         } catch (IllegalArgumentException ignored) { }
                     }
                 }
