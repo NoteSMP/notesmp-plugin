@@ -142,7 +142,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     private void scheduleUpdateCheck() {
         if (!getConfig().getBoolean("updates.enabled", true)) return;
         long interval = Math.max(30L, getConfig().getLong("updates.check-interval-minutes", 360L));
-        getServer().getScheduler().runTaskLaterAsynchronously(this, this::checkForUpdate, 600L);
+        getServer().getScheduler().// Check shortly after enable so a pending release is staged before the next restart.
+        getServer().getScheduler().runTaskLaterAsynchronously(this, this::checkForUpdate, 40L);
         getServer().getScheduler().runTaskTimerAsynchronously(this, this::checkForUpdate, interval * 1200L, interval * 1200L);
     }
 
