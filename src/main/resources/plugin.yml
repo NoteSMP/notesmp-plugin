@@ -1,5 +1,5 @@
 name: NoteSMP
-version: 1.0.2
+version: 1.0.3
 main: de.notesmp.plugin.NoteSMPPlugin
 api-version: '26.3'
 description: NoteSMP API heartbeat, player statistics and Discord account verification.
