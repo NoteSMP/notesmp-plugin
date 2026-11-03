@@ -11,3 +11,9 @@ statistics:
   interval-seconds: 300
   # Send every statistic tracked by Paper, including material/entity sub-statistics.
   include-substatistics: true
+
+updates:
+  # Check GitHub Releases for newer NoteSMP plugin builds.
+  enabled: true
+  # Default: every six hours. Minimum accepted value: 30 minutes.
+  check-interval-minutes: 360
