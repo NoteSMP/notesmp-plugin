@@ -43,7 +43,11 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         botBase = trimSlash(getConfig().getString("api.bot-url", "https://notesmp-bot.notesmp-de.workers.dev"));
         apiKey = getConfig().getString("api.key", "").trim();
         includeSubstatistics = getConfig().getBoolean("statistics.include-substatistics", true);
-        http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
+        http = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(8))
+                // GitHub release asset URLs redirect to the actual asset host.
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
 
         if (apiKey.isBlank() || apiKey.equals("CHANGE_ME")) {
             getLogger().severe("Configure api.key in plugins/NoteSMP/config.yml before using API features.");
