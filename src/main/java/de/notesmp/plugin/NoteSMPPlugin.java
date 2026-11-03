@@ -140,14 +140,14 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         }
 
         String code = args[0];
-        String body = "{\\"code\\":" + quote(code)
-                + ",\\"minecraftUuid\\":" + quote(player.getUniqueId().toString())
-                + ",\\"minecraftName\\":" + quote(player.getName()) + "}";
+        String body = "{\"code\":" + quote(code)
+                + ",\"minecraftUuid\":" + quote(player.getUniqueId().toString())
+                + ",\"minecraftName\":" + quote(player.getName()) + "}";
         player.sendMessage("Checking your NoteSMP verification code…");
 
         postJson(botBase + "/minecraft/verify", body, response -> {
             boolean success = response != null && response.statusCode() >= 200 && response.statusCode() < 300
-                    && response.body() != null && response.body().contains("\\"ok\\":true");
+                    && response.body() != null && response.body().contains("\"ok\":true");
             getServer().getScheduler().runTask(this, () -> {
                 if (!player.isOnline()) return;
                 if (success) {
@@ -256,7 +256,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 java.nio.file.Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
             // Write the success marker only after the complete JAR is staged.
-            java.nio.file.Files.writeString(getDataFolder().toPath().resolve("pending-update.txt"), tag + "\\n" + (commit == null ? "unknown" : commit));
+            java.nio.file.Files.writeString(getDataFolder().toPath().resolve("pending-update.txt"), tag + "\n" + (commit == null ? "unknown" : commit));
             String updateMessage = "Downloaded NoteSMP " + tag + " to plugins/update/" + installedName + ". Restart the server to apply it; the server will not be restarted automatically.";
             consoleLog("INFO", updateMessage);
             replyUpdate(requester, updateMessage);
@@ -280,7 +280,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             char c = json.charAt(i);
             if (inString) {
                 if (escaped) escaped = false;
-                else if (c == '\\\\') escaped = true;
+                else if (c == '\\') escaped = true;
                 else if (c == '"') inString = false;
                 continue;
             }
@@ -300,7 +300,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     private static String jsonString(String json, String key) {
         java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                "\\\""+ java.util.regex.Pattern.quote(key) + "\\\"\\s*:\\s*\\\"((?:\\\\.|[^\\\"\\\\])*)\\\"").matcher(json);
+                "\\\"" + java.util.regex.Pattern.quote(key) + "\\\"\\s*:\\s*\\\"((?:\\\\.|[^\\\"\\\\])*)\\\"").matcher(json);
         if (!m.find()) return null;
         return m.group(1).replace("\\\\/", "/").replace("\\\\\"", "\\\"").replace("\\\\\\\\", "\\\\");
     }
@@ -512,7 +512,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 first = false;
                 out.append(quote(String.valueOf(entry.getKey()))).append(':').append(toJson(entry.getValue()));
             }
-            return out.append('}');
+            return out.append('}').toString();
         }
         if (value instanceof Iterable<?> items) {
             StringBuilder out = new StringBuilder("[");
@@ -522,7 +522,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 first = false;
                 out.append(toJson(item));
             }
-            return out.append(']');
+            return out.append(']').toString();
         }
         return quote(value.toString());
     }
