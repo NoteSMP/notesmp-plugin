@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>de.notesmp</groupId>
   <artifactId>notesmp-plugin</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
   <name>NoteSMP Plugin</name>
   <properties>
     <maven.compiler.release>25</maven.compiler.release>
