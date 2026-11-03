@@ -74,7 +74,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         getServer().getScheduler().runTaskTimer(this, this::sendAllPlayerStats, statsTicks, statsTicks);
 
         scheduleUpdateCheck();
-        consoleLog("INFO", "[NoteSMP] plugin enabled. Heartbeat and player-stat synchronization scheduled.");
+        consoleLog("INFO", "NoteSMP plugin enabled. Heartbeat and player-stat synchronization scheduled.");
     }
 
     @Override
@@ -176,7 +176,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             case "WARN" -> "§e";
             default -> "§7";
         };
-        Bukkit.getConsoleSender().sendMessage("§b[§fNote§bSMP§r] " + levelColor + message);
+        Bukkit.getConsoleSender().sendMessage("§f[Note§bSMP§f]§r " + levelColor + message);
     }
 
     private void logUpdateNotice() {
