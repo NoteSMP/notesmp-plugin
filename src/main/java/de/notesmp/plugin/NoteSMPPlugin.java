@@ -204,31 +204,38 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     private void checkForUpdate(CommandSender requester) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.github.com/repos/NoteSMP/notesmp-plugin/releases?per_page=1"))
+            HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.github.com/repos/NoteSMP/notesmp-plugin/releases?per_page=100"))
                     .timeout(Duration.ofSeconds(15)).header("Accept", "application/vnd.github+json").GET().build();
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 404) return;
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 consoleLog("WARN", "GitHub update check returned HTTP " + response.statusCode()); return;
             }
-            String tag = jsonString(response.body(), "tag_name");
-            String releaseName = jsonString(response.body(), "name");
-            String commit = jsonString(response.body(), "target_commitish");
-            // GitHub build releases use internal tags such as "build-31". Compare the
-            // plugin version from the release title, not that internal tag.
-            String latest = releaseName == null ? null
-                    : releaseName.replaceFirst("^NoteSMP\\s+Plugin\\s+", "").trim();
-            if (latest == null || latest.equals(releaseName)) {
-                latest = tag == null ? null : tag.replaceFirst("^[vV]", "");
+
+            // GitHub's release listing can put stable releases ahead of newer dev builds.
+            // Scan release objects and select the greatest NoteSMP plugin version.
+            String selectedRelease = null;
+            String latest = null;
+            for (String release : jsonArrayObjects(response.body())) {
+                String name = jsonString(release, "name");
+                if (name == null || !name.startsWith("NoteSMP Plugin ")) continue;
+                String version = name.replaceFirst("^NoteSMP\\s+Plugin\\s+", "").trim();
+                if (latest == null || isNewerVersion(version, latest)) {
+                    latest = version;
+                    selectedRelease = release;
+                }
             }
-            if (latest == null || !isNewerVersion(latest, getPluginMeta().getVersion())) {
+            if (selectedRelease == null || latest == null
+                    || !isNewerVersion(latest, getPluginMeta().getVersion())) {
                 replyUpdate(requester, "NoteSMP v" + getPluginMeta().getVersion() + " is up to date. No update queued.");
                 return;
             }
 
+            String tag = jsonString(selectedRelease, "tag_name");
+            String commit = jsonString(selectedRelease, "target_commitish");
             java.util.regex.Matcher m = java.util.regex.Pattern.compile(
                     "\\\"browser_download_url\\\"\\s*:\\s*\\\"(https://github\\.com/NoteSMP/notesmp-plugin/releases/download/[^\\\"\\s]+\\.jar)\\\"")
-                    .matcher(response.body());
+                    .matcher(selectedRelease);
             if (!m.find()) { getLogger().warning("Release " + tag + " has no JAR asset."); return; }
             String url = m.group(1);
             HttpResponse<byte[]> jar = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60)).GET().build(),
@@ -261,6 +268,34 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     private void replyUpdate(CommandSender requester, String message) {
         if (requester != null) getServer().getScheduler().runTask(this, () -> requester.sendMessage("[NoteSMP] " + message));
+    }
+
+    private static List<String> jsonArrayObjects(String json) {
+        List<String> objects = new ArrayList<>();
+        boolean inString = false;
+        boolean escaped = false;
+        int depth = 0;
+        int start = -1;
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (inString) {
+                if (escaped) escaped = false;
+                else if (c == '\\') escaped = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') {
+                inString = true;
+            } else if (c == '{') {
+                if (depth++ == 0) start = i;
+            } else if (c == '}' && depth > 0) {
+                if (--depth == 0 && start >= 0) {
+                    objects.add(json.substring(start, i + 1));
+                    start = -1;
+                }
+            }
+        }
+        return objects;
     }
 
     private static String jsonString(String json, String key) {
