@@ -7,7 +7,7 @@ authors: [NoteSMP]
 commands:
   notesmp:
     description: NoteSMP plugin utilities.
-    usage: /notesmp update
+    usage: /notesmp <update|version|activitylog on|off>
     permission: notesmp.update
   verify:
     description: Link your Minecraft account to your NoteSMP Discord account.
@@ -20,3 +20,6 @@ permissions:
   notesmp.verify:
     description: Allows a player to link their Minecraft account.
     default: true
+  notesmp.activitylog:
+    description: Allows toggling detailed NoteSMP activity logging.
+    default: op
