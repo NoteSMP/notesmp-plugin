@@ -102,6 +102,36 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         }
     }
 
+    private void syncPlayerAdvancements(Player player) {
+        if (!ready() || !player.isOnline()) return;
+        List<Map<String, Object>> earned = new ArrayList<>();
+        for (org.bukkit.advancement.Advancement advancement : Bukkit.advancementIterator()) {
+            org.bukkit.advancement.AdvancementProgress progress = player.getAdvancementProgress(advancement);
+            if (!progress.isDone()) continue;
+            Instant earnedAt = Instant.now();
+            for (String criterion : progress.getAwardedCriteria()) {
+                java.util.Date date = progress.getDateAwarded(criterion);
+                if (date != null && date.toInstant().isBefore(earnedAt)) earnedAt = date.toInstant();
+            }
+            Map<String, Object> record = new LinkedHashMap<>();
+            record.put("advancementId", advancement.getKey().toString());
+            record.put("title", advancement.getKey().getKey().replace('_', ' '));
+            record.put("earnedAt", earnedAt.toString());
+            earned.add(record);
+        }
+        activityLog("Backfilling " + earned.size() + " earned advancements for " + player.getName());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("uuid", player.getUniqueId().toString());
+        payload.put("username", player.getName());
+        payload.put("advancements", earned);
+        postJson(apiBase + "/v1/minecraft/advancements", toJson(payload), response -> {
+            if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
+                consoleLog("WARN", "Advancement history sync failed for " + player.getName()
+                        + (response == null ? " (network error)" : " (HTTP " + response.statusCode() + ")"));
+            }
+        });
+    }
+
     @EventHandler
     public void onAdvancementDone(PlayerAdvancementDoneEvent event) {
         if (!ready()) return;
@@ -123,6 +153,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
+        getServer().getScheduler().runTaskLater(this, () -> syncPlayerAdvancements(event.getPlayer()), 60L);
         // Publish count/list immediately after Bukkit updates the online-player collection.
         getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 1L);
         getServer().getScheduler().runTaskLater(this, () -> sendPlayerStats(event.getPlayer()), 40L);
