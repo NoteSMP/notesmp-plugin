@@ -52,10 +52,10 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 .build();
 
         if (apiKey.isBlank() || apiKey.equals("CHANGE_ME")) {
-            getLogger().severe("Configure api.key in plugins/NoteSMP/config.yml before using API features.");
+            consoleLog("ERROR", "Configure api.key in plugins/NoteSMP/config.yml before using API features.");
         }
         if (!isHttpUrl(apiBase) || !isHttpUrl(botBase)) {
-            getLogger().severe("Invalid API URL in plugins/NoteSMP/config.yml. Both URLs must be valid HTTP(S) URLs.");
+            consoleLog("ERROR", "Invalid API URL in plugins/NoteSMP/config.yml. Both URLs must be valid HTTP(S) URLs.");
         }
 
         getServer().getPluginManager().registerEvents(this, this);
@@ -74,7 +74,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         getServer().getScheduler().runTaskTimer(this, this::sendAllPlayerStats, statsTicks, statsTicks);
 
         scheduleUpdateCheck();
-        getLogger().info("[NoteSMP] plugin enabled. Heartbeat and player-stat synchronization scheduled.");
+        consoleLog("INFO", "[NoteSMP] plugin enabled. Heartbeat and player-stat synchronization scheduled.");
     }
 
     @Override
@@ -91,10 +91,10 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                         .build();
                 HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    getLogger().warning("§6[NoteSMP]§r Could not mark server offline during shutdown (HTTP " + response.statusCode() + ").");
+                    consoleLog("WARN", "§6[NoteSMP]§r Could not mark server offline during shutdown (HTTP " + response.statusCode() + ").");
                 }
             } catch (Exception exception) {
-                getLogger().warning("Could not mark server offline during shutdown: " + exception.getMessage());
+                consoleLog("WARN", "Could not mark server offline during shutdown: " + exception.getMessage());
             }
         }
     }
@@ -170,6 +170,15 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         return suggestions;
     }
 
+    private void consoleLog(String level, String message) {
+        String levelColor = switch (level) {
+            case "ERROR" -> "§c";
+            case "WARN" -> "§e";
+            default -> "§7";
+        };
+        Bukkit.getConsoleSender().sendMessage("§b[§fNote§bSMP§r] " + levelColor + message);
+    }
+
     private void logUpdateNotice() {
         java.nio.file.Path notice = getDataFolder().toPath().resolve("pending-update.txt");
         if (!java.nio.file.Files.exists(notice)) return;
@@ -178,10 +187,10 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             String tag = lines.isEmpty() ? "unknown" : lines.get(0).trim();
             String commit = lines.size() < 2 ? "unknown" : lines.get(1).trim();
             String shortCommit = commit.length() > 7 ? commit.substring(0, 7) : commit;
-            getLogger().info("Plugin updated to " + tag + " — Commit[" + shortCommit + "](https://github.com/NoteSMP/notesmp-plugin/commit/" + commit + ")");
+            consoleLog("INFO", "Plugin updated to " + tag + " — Commit[" + shortCommit + "](https://github.com/NoteSMP/notesmp-plugin/commit/" + commit + ")");
             java.nio.file.Files.deleteIfExists(notice);
         } catch (Exception e) {
-            getLogger().warning("Could not read plugin update notice: " + e.getMessage());
+            consoleLog("WARN", "Could not read plugin update notice: " + e.getMessage());
         }
     }
 
@@ -200,7 +209,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 404) return;
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                getLogger().warning("GitHub update check returned HTTP " + response.statusCode()); return;
+                consoleLog("WARN", "GitHub update check returned HTTP " + response.statusCode()); return;
             }
             String tag = jsonString(response.body(), "tag_name");
             String commit = jsonString(response.body(), "target_commitish");
@@ -215,7 +224,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             HttpResponse<byte[]> jar = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60)).GET().build(),
                     HttpResponse.BodyHandlers.ofByteArray());
             if (jar.statusCode() < 200 || jar.statusCode() >= 300 || jar.body().length < 1024 || jar.body().length > 50 * 1024 * 1024) {
-                getLogger().warning("Update JAR download failed or had an invalid size (HTTP " + jar.statusCode() + ")."); return;
+                consoleLog("WARN", "Update JAR download failed or had an invalid size (HTTP " + jar.statusCode() + ")."); return;
             }
             java.nio.file.Path dir = getDataFolder().getParentFile().toPath().resolve("update");
             java.nio.file.Files.createDirectories(dir);
@@ -232,10 +241,10 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             // Write the success marker only after the complete JAR is staged.
             java.nio.file.Files.writeString(getDataFolder().toPath().resolve("pending-update.txt"), tag + "\n" + (commit == null ? "unknown" : commit));
             String updateMessage = "Downloaded NoteSMP " + tag + " to plugins/update/" + installedName + ". Restart the server to apply it; the server will not be restarted automatically.";
-            getLogger().info(updateMessage);
+            consoleLog("INFO", updateMessage);
             replyUpdate(requester, updateMessage);
         } catch (Exception ex) {
-            getLogger().warning("Update check failed: " + ex.getMessage());
+            consoleLog("WARN", "Update check failed: " + ex.getMessage());
             replyUpdate(requester, "Update check failed: " + ex.getMessage());
         }
     }
@@ -300,7 +309,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         payload.put("onlinePlayers", players);
         postJson(apiBase + "/v1/minecraft/heartbeat", toJson(payload), response -> {
             if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
-                getLogger().warning("Server heartbeat failed" + (response == null ? " (network error)" : " with HTTP " + response.statusCode()));
+                consoleLog("WARN", "Server heartbeat failed" + (response == null ? " (network error)" : " with HTTP " + response.statusCode()));
             }
         });
     }
@@ -352,7 +361,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         payload.put("statistics", statistics);
         postJson(botBase + "/minecraft/playerstats", toJson(payload), response -> {
             if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
-                getLogger().warning("Player-stat sync failed for " + player.getName() + (response == null ? " (network error)" : " (HTTP " + response.statusCode() + ")"));
+                consoleLog("WARN", "Player-stat sync failed for " + player.getName() + (response == null ? " (network error)" : " (HTTP " + response.statusCode() + ")"));
             }
         });
     }
@@ -413,7 +422,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .whenComplete((response, error) -> {
                     if (error != null) {
-                        getLogger().warning("NoteSMP API request failed: " + error.getMessage());
+                        consoleLog("WARN", "NoteSMP API request failed: " + error.getMessage());
                         if (callback != null) callback.accept(null);
                     } else if (callback != null) {
                         callback.accept(response);
