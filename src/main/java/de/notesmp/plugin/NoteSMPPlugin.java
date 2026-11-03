@@ -176,7 +176,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             case "WARN" -> "§e";
             default -> "§7";
         };
-        Bukkit.getConsoleSender().sendMessage("§f[§x§f§6§a§f§2§2Note§x§e§6§7§c§1§5SMP§r§f]§r " + levelColor + message);
+        Bukkit.getConsoleSender().sendMessage("§f[§eNote§6SMP§f]§r " + levelColor + message);
     }
 
     private void logUpdateNotice() {
