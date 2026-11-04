@@ -529,7 +529,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         activityLog("Collecting detailed statistics for " + player.getName() + " (" + uuid + ")");
         Map<String, Object> base = new LinkedHashMap<>();
         base.put("playtime_seconds", Math.max(0, player.getStatistic(Statistic.PLAY_ONE_MINUTE) / 20L));
-        base.put("deaths", safeStatistic(player, "DEATHS"));\n        base.put("blocks_placed", sumMaterialStatistic(player, Statistic.valueOf("PLACE_BLOCK"), true));\n        base.put("blocks_broken", sumMaterialStatistic(player, Statistic.valueOf("MINE_BLOCK"), true));
+        base.put("deaths", safeStatistic(player, "DEATHS"));\n        base.put("blocks_placed", sumMaterialStatistic(player, Statistic.USE_ITEM, true));\n        base.put("blocks_broken", sumMaterialStatistic(player, Statistic.valueOf("MINE_BLOCK"), true));
         Map<String, Object> statistics = collectStatistics(player);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("uuid", uuid.toString());
