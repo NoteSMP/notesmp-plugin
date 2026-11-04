@@ -36,7 +36,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     private String botBase;
     private String apiKey;
     private boolean includeSubstatistics;
-    private boolean statsSyncInProgress;
     private boolean activityLogEnabled;
 
     @Override
@@ -69,15 +68,15 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         }
 
         long heartbeatTicks = Math.max(20L, getConfig().getLong("heartbeat.interval-seconds", 60L) * 20L);
-        long statsTicks = Math.max(100L, getConfig().getLong("statistics.interval-seconds", 300L) * 20L);
         // Publish an initial state promptly after startup instead of waiting a full interval.
         getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 20L);
         getServer().getScheduler().runTaskTimer(this, this::sendHeartbeat, heartbeatTicks, heartbeatTicks);
-        getServer().getScheduler().runTaskLater(this, this::sendAllPlayerStats, 100L);
-        getServer().getScheduler().runTaskTimer(this, this::sendAllPlayerStats, statsTicks, statsTicks);
+        long statsPollTicks = Math.max(40L, getConfig().getLong("statistics.poll-interval-seconds", 5L) * 20L);
+        getServer().getScheduler().runTaskLaterAsynchronously(this, this::pollStatsRefreshRequest, 40L);
+        getServer().getScheduler().runTaskTimerAsynchronously(this, this::pollStatsRefreshRequest, statsPollTicks, statsPollTicks);
 
         scheduleUpdateCheck();
-        consoleLog("INFO", "NoteSMP plugin enabled. Heartbeat and player-stat synchronization scheduled.");
+        consoleLog("INFO", "NoteSMP plugin enabled. Heartbeat and on-demand player-stat refresh polling scheduled.");
     }
 
     @Override
@@ -158,12 +157,10 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         getServer().getScheduler().runTaskLater(this, () -> syncPlayerAdvancements(event.getPlayer()), 60L);
         // Publish count/list immediately after Bukkit updates the online-player collection.
         getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 1L);
-        getServer().getScheduler().runTaskLater(this, () -> sendPlayerStats(event.getPlayer()), 40L);
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        sendPlayerStats(event.getPlayer());
         // Delay one tick so the departing player is no longer counted.
         getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 1L);
     }
@@ -438,32 +435,26 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         });
     }
 
-    private void sendAllPlayerStats() {
-        if (!ready() || statsSyncInProgress) return;
-
-        // Avoid collecting every offline player's complete statistic map in one server
-        // tick. Large player histories can otherwise cause a noticeable tick stall.
-        List<OfflinePlayer> players = new ArrayList<>();
-        for (OfflinePlayer player : Bukkit.getOfflinePlayers()) {
-            if (player.getName() != null && player.hasPlayedBefore()) players.add(player);
-        }
-        if (players.isEmpty()) { activityLog("Player-stat sync skipped: no known players"); return; }
-
-        activityLog("Starting full player-stat sync for " + players.size() + " player records");
-        statsSyncInProgress = true;
-        final int[] index = {0};
-        getServer().getScheduler().runTaskTimer(this, task -> {
-            if (!ready() || index[0] >= players.size()) {
-                statsSyncInProgress = false;
-                task.cancel();
-                return;
-            }
-            sendPlayerStats(players.get(index[0]++));
-            if (index[0] >= players.size()) {
-                statsSyncInProgress = false;
-                task.cancel();
-            }
-        }, 1L, 1L);
+    private void pollStatsRefreshRequest() {
+        if (!ready()) return;
+        HttpRequest request = HttpRequest.newBuilder(URI.create(apiBase + "/v1/minecraft/stats-request"))
+                .timeout(Duration.ofSeconds(10))
+                .header("Authorization", "Bearer " + apiKey)
+                .GET().build();
+        http.sendAsync(request, HttpResponse.BodyHandlers.ofString()).thenAccept(response -> {
+            if (response.statusCode() < 200 || response.statusCode() >= 300) return;
+            String body = response.body();
+            java.util.regex.Matcher uuidMatcher = java.util.regex.Pattern
+                    .compile("\\\"uuid\\\"\\s*:\\s*\\\"([0-9a-fA-F-]{36})\\\"").matcher(body);
+            if (!uuidMatcher.find()) return;
+            UUID uuid;
+            try { uuid = UUID.fromString(uuidMatcher.group(1)); }
+            catch (IllegalArgumentException ignored) { return; }
+            getServer().getScheduler().runTask(this, () -> {
+                OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
+                if (player.getName() != null) sendPlayerStats(player);
+            });
+        });
     }
 
     private void sendPlayerStats(OfflinePlayer player) {
@@ -486,7 +477,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         payload.put("lastSeen", isoDate(player.isOnline() ? System.currentTimeMillis() : player.getLastPlayed()));
         payload.put("baseStats", base);
         payload.put("statistics", statistics);
-        postJson(botBase + "/minecraft/playerstats", toJson(payload), response -> {
+        postJson(apiBase + "/v1/minecraft/playerstats", toJson(payload), response -> {
             if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
                 consoleLog("WARN", "Player-stat sync failed for " + player.getName() + (response == null ? " (network error)" : " (HTTP " + response.statusCode() + ")"));
             }
