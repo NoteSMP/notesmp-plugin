@@ -1,6 +1,6 @@
 package de.notesmp.plugin;
 
-import org.bukkit.Bukkit;
+import com.google.gson.JsonElement;\nimport com.google.gson.JsonObject;\nimport com.google.gson.JsonParser;\nimport org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.Statistic;
@@ -61,7 +61,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             consoleLog("ERROR", "Invalid API URL in plugins/NoteSMP/config.yml. Both URLs must be valid HTTP(S) URLs.");
         }
 
-        getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(this, this);\n        getServer().getScheduler().runTaskLater(this, this::reconcileSavedAdvancements, 100L);
         if (getCommand("verify") != null) getCommand("verify").setExecutor(this);
         if (getCommand("notesmp") != null) {
             getCommand("notesmp").setExecutor(this);
@@ -99,6 +99,67 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             } catch (Exception exception) {
                 consoleLog("WARN", "Could not mark server offline during shutdown: " + exception.getMessage());
             }
+        }
+    }
+
+    private void reconcileSavedAdvancements() {
+        if (!ready() || Bukkit.getWorlds().isEmpty()) return;
+        java.nio.file.Path directory = Bukkit.getWorlds().get(0).getWorldFolder().toPath().resolve("advancements");
+        if (!java.nio.file.Files.isDirectory(directory)) return;
+        Map<String, org.bukkit.advancement.Advancement> registry = new LinkedHashMap<>();
+        java.util.Iterator<org.bukkit.advancement.Advancement> iterator = Bukkit.advancementIterator();
+        while (iterator.hasNext()) {
+            org.bukkit.advancement.Advancement advancement = iterator.next();
+            registry.put(advancement.getKey().toString(), advancement);
+        }
+        try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(directory)) {
+            files.filter(path -> path.getFileName().toString().matches("[0-9a-fA-F-]{36}\\.json"))
+                    .forEach(path -> {
+                        String fileName = path.getFileName().toString();
+                        UUID uuid;
+                        try { uuid = UUID.fromString(fileName.substring(0, fileName.length() - 5)); }
+                        catch (IllegalArgumentException ignored) { return; }
+                        OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
+                        if (player.getName() == null) return;
+                        List<Map<String, Object>> earned = new ArrayList<>();
+                        try {
+                            JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(path)).getAsJsonObject();
+                            for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
+                                org.bukkit.advancement.Advancement advancement = registry.get(entry.getKey());
+                                if (advancement == null || !entry.getValue().isJsonObject()) continue;
+                                JsonObject progress = entry.getValue().getAsJsonObject();
+                                JsonObject criteria = progress.has("criteria") && progress.get("criteria").isJsonObject()
+                                        ? progress.getAsJsonObject("criteria") : new JsonObject();
+                                int required = advancement.getCriteria().size();
+                                if (required == 0 || criteria.size() < required) continue;
+                                Instant earnedAt = Instant.now();
+                                for (JsonElement date : criteria.asMap().values()) {
+                                    if (!date.isJsonPrimitive() || !date.getAsJsonPrimitive().isString()) continue;
+                                    try {
+                                        Instant parsed = Instant.parse(date.getAsString());
+                                        if (parsed.isBefore(earnedAt)) earnedAt = parsed;
+                                    } catch (Exception ignored) { }
+                                }
+                                Map<String, Object> record = new LinkedHashMap<>();
+                                record.put("advancementId", entry.getKey());
+                                record.put("title", advancement.getKey().getKey().replace('_', ' '));
+                                record.put("earnedAt", earnedAt.toString());
+                                earned.add(record);
+                            }
+                            Map<String, Object> payload = new LinkedHashMap<>();
+                            payload.put("uuid", uuid.toString());
+                            payload.put("username", player.getName());
+                            payload.put("advancements", earned);
+                            postJson(apiBase + "/v1/minecraft/advancements", toJson(payload), response -> {
+                                if (response == null || response.statusCode() < 200 || response.statusCode() >= 300)
+                                    consoleLog("WARN", "Startup advancement reconciliation failed for " + player.getName());
+                            });
+                        } catch (Exception exception) {
+                            consoleLog("WARN", "Could not reconcile advancement file " + fileName + ": " + exception.getMessage());
+                        }
+                    });
+        } catch (Exception exception) {
+            consoleLog("WARN", "Could not scan saved player advancements: " + exception.getMessage());
         }
     }
 
@@ -468,7 +529,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         activityLog("Collecting detailed statistics for " + player.getName() + " (" + uuid + ")");
         Map<String, Object> base = new LinkedHashMap<>();
         base.put("playtime_seconds", Math.max(0, player.getStatistic(Statistic.PLAY_ONE_MINUTE) / 20L));
-        base.put("deaths", safeStatistic(player, "DEATHS"));
+        base.put("deaths", safeStatistic(player, "DEATHS"));\n        base.put("blocks_placed", sumMaterialStatistic(player, Statistic.valueOf("PLACE_BLOCK"), true));\n        base.put("blocks_broken", sumMaterialStatistic(player, Statistic.valueOf("MINE_BLOCK"), true));
         Map<String, Object> statistics = collectStatistics(player);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("uuid", uuid.toString());
