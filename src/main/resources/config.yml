@@ -8,8 +8,9 @@ heartbeat:
   interval-seconds: 60
 
 statistics:
-  interval-seconds: 300
-  # Send every statistic tracked by Paper, including material/entity sub-statistics.
+  # Poll the API for individual refresh requests; no full automatic stat sync is performed.
+  poll-interval-seconds: 5
+  # Include material/entity sub-statistics when a player is explicitly refreshed.
   include-substatistics: true
 
 updates:
