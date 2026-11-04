@@ -130,8 +130,10 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                                 JsonObject progress = entry.getValue().getAsJsonObject();
                                 JsonObject criteria = progress.has("criteria") && progress.get("criteria").isJsonObject()
                                         ? progress.getAsJsonObject("criteria") : new JsonObject();
-                                int required = advancement.getCriteria().size();
-                                if (required == 0 || criteria.size() < required) continue;
+                                boolean complete = !advancement.getRequirements().getRequirements().isEmpty()
+                                        && advancement.getRequirements().getRequirements().stream().allMatch(requirement ->
+                                            requirement.getRequiredCriteria().stream().anyMatch(criteria::has));
+                                if (!complete) continue;
                                 Instant earnedAt = Instant.now();
                                 for (JsonElement date : criteria.asMap().values()) {
                                     if (!date.isJsonPrimitive() || !date.getAsJsonPrimitive().isString()) continue;
