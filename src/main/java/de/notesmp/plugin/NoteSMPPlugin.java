@@ -155,14 +155,18 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        getServer().getScheduler().runTaskLater(this, () -> syncPlayerAdvancements(event.getPlayer()), 60L);
-        // Publish count/list immediately after Bukkit updates the online-player collection.
+        Player player = event.getPlayer();
+        getServer().getScheduler().runTaskLater(this, () -> {
+            sendPlayerStats(player);
+            syncPlayerAdvancements(player);
+        }, 60L);
         getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 1L);
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        // Delay one tick so the departing player is no longer counted.
+        // Capture the final loaded snapshot while the player is still available.
+        sendPlayerStats(event.getPlayer());
         getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 1L);
     }
 
@@ -498,51 +502,29 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     private Map<String, Object> collectStatistics(OfflinePlayer player) {
         Map<String, Object> values = new LinkedHashMap<>();
         String[][] requested = {
-            {"time_played", "PLAY_ONE_MINUTE"}, {"mob_kills", "MOB_KILLS"},
-            {"player_kills", "PLAYER_KILLS"}, {"deaths", "DEATHS"},
-            {"time_since_last_death", "TIME_SINCE_DEATH"},
-            {"damage_absorbed", "DAMAGE_ABSORBED"}, {"damage_dealt", "DAMAGE_DEALT"},
-            {"damage_resisted", "DAMAGE_RESISTED"}, {"damage_taken", "DAMAGE_TAKEN"},
-            {"jumps", "JUMP"}, {"sneak_time", "SNEAK_TIME"}, {"distance_climbed", "CLIMB_ONE_CM"},
-            {"distance_crouched", "CROUCH_ONE_CM"}, {"distance_fallen", "FALL_ONE_CM"},
-            {"distance_flown", "FLY_ONE_CM"}, {"distance_sprinted", "SPRINT_ONE_CM"},
-            {"distance_swum", "SWIM_ONE_CM"}, {"distance_walked", "WALK_ONE_CM"},
-            {"distance_walked_on_water", "WALK_ON_WATER_ONE_CM"},
-            {"distance_walked_under_water", "WALK_UNDER_WATER_ONE_CM"},
+            {"mob_kills", "MOB_KILLS"}, {"player_kills", "PLAYER_KILLS"}, {"deaths", "DEATHS"},
+            {"time_since_last_death", "TIME_SINCE_DEATH"}, {"damage_absorbed", "DAMAGE_ABSORBED"},
+            {"damage_dealt", "DAMAGE_DEALT"}, {"damage_resisted", "DAMAGE_RESISTED"},
+            {"damage_taken", "DAMAGE_TAKEN"}, {"jumps", "JUMP"}, {"sneak_time", "SNEAK_TIME"},
+            {"distance_climbed", "CLIMB_ONE_CM"}, {"distance_crouched", "CROUCH_ONE_CM"},
+            {"distance_fallen", "FALL_ONE_CM"}, {"distance_flown", "FLY_ONE_CM"},
+            {"distance_sprinted", "SPRINT_ONE_CM"}, {"distance_swum", "SWIM_ONE_CM"},
+            {"distance_walked", "WALK_ONE_CM"}, {"distance_walked_under_water", "WALK_UNDER_WATER_ONE_CM"},
             {"distance_by_boat", "BOAT_ONE_CM"}, {"distance_by_elytra", "AVIATE_ONE_CM"},
             {"distance_by_happy_ghast", "HAPPY_GHAST_ONE_CM"}, {"distance_by_horse", "HORSE_ONE_CM"},
-            {"distance_by_minecart", "MINECART_ONE_CM"}, {"distance_by_nautilus", "NAUTILUS_ONE_CM"},
-            {"distance_by_pig", "PIG_ONE_CM"}, {"distance_by_strider", "STRIDER_ONE_CM"},
-            {"fish_caught", "FISH_CAUGHT"}, {"animals_bred", "BREED_ANIMALS"},
-            {"chests_opened", "OPEN_CHEST"}, {"barrels_opened", "OPEN_BARREL"},
-            {"shulker_boxes_opened", "OPEN_SHULKER_BOX"}, {"items_dropped", "DROP"},
-            {"items_enchanted", "ENCHANT_ITEM"}, {"talked_to_villagers", "TALKED_TO_VILLAGER"},
-            {"traded_with_villagers", "TRADED_WITH_VILLAGER"}, {"time_since_last_rest", "TIME_SINCE_REST"},
-            {"times_slept_in_a_bed", "SLEEP_IN_BED"}
+            {"distance_by_minecart", "MINECART_ONE_CM"}, {"fish_caught", "FISH_CAUGHT"},
+            {"animals_bred", "BREED_ANIMALS"}, {"chests_opened", "OPEN_CHEST"},
+            {"barrels_opened", "OPEN_BARREL"}, {"shulker_boxes_opened", "OPEN_SHULKER_BOX"},
+            {"items_dropped", "DROP"}, {"items_enchanted", "ENCHANT_ITEM"},
+            {"talked_to_villagers", "TALKED_TO_VILLAGER"}, {"traded_with_villagers", "TRADED_WITH_VILLAGER"},
+            {"time_since_last_rest", "TIME_SINCE_REST"}, {"times_slept_in_a_bed", "SLEEP_IN_BED"}
         };
         for (String[] stat : requested) {
-            try {
-                Statistic statistic = Statistic.valueOf(stat[1]);
-                int value = player.getStatistic(statistic);
-                values.put(stat[0], stat[0].equals("time_played") ? Math.max(0, value / 20) : Math.max(0, value));
-            } catch (IllegalArgumentException | NoSuchFieldError ignored) {
-                values.put(stat[0], 0);
-            }
+            try { values.put(stat[0], Math.max(0, player.getStatistic(Statistic.valueOf(stat[1])))); }
+            catch (IllegalArgumentException | NoSuchFieldError ignored) { values.put(stat[0], 0); }
         }
-        Map<String, Object> mobKills = new LinkedHashMap<>();
-        try {
-            Statistic killEntity = Statistic.valueOf("KILL_ENTITY");
-            for (EntityType entity : EntityType.values()) {
-                Class<?> entityClass = entity.getEntityClass();
-                if (entityClass == null || !LivingEntity.class.isAssignableFrom(entityClass)) continue;
-                try {
-                    int count = player.getStatistic(killEntity, entity);
-                    // Send every living entity, including zeroes, so the website can render a complete list.
-                    mobKills.put(entity.getKey().getKey(), Math.max(0, count));
-                } catch (IllegalArgumentException ignored) { }
-            }
-        } catch (IllegalArgumentException | NoSuchFieldError ignored) { }
-        values.put("mob_kill_breakdown", mobKills);
+        values.put("blocks_placed", sumMaterialStatistic(player, Statistic.valueOf("PLACE_BLOCK"), true));
+        values.put("blocks_broken", sumMaterialStatistic(player, Statistic.valueOf("MINE_BLOCK"), true));
         return values;
     }
 
