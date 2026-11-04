@@ -9,6 +9,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -170,8 +171,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         if (command.getName().equalsIgnoreCase("notesmp")) {
             if (args.length == 1 && args[0].equalsIgnoreCase("version")) {
                 sender.sendMessage("[NoteSMP] Running version " + getPluginMeta().getVersion() + ".");
-            } else if (args.length == 1 && args[0].equalsIgnoreCase("update") && sender.hasPermission("notesmp.update")) {
-                sender.sendMessage("Checking latest NoteSMP release...");
+            } else if (args.length == 1 && (args[0].equalsIgnoreCase("update") || args[0].equalsIgnoreCase("updates")) && sender.hasPermission("notesmp.update")) {
+                sender.sendMessage("Checking and staging the latest NoteSMP update. A server restart is required to apply it safely.");
                 activityLog("Manual plugin update check requested by " + sender.getName());
                 getServer().getScheduler().runTaskAsynchronously(this, () -> checkForUpdate(sender));
             } else if (args.length == 2 && args[0].equalsIgnoreCase("activitylog") && sender.hasPermission("notesmp.activitylog")) {
@@ -185,7 +186,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                     consoleLog("INFO", "Detailed activity log " + (activityLogEnabled ? "enabled" : "disabled") + " by " + sender.getName() + ".");
                 }
             } else {
-                sender.sendMessage(sender.hasPermission("notesmp.update") ? "Usage: /notesmp <update|version|activitylog on|off>" : "Usage: /notesmp version");
+                sender.sendMessage(sender.hasPermission("notesmp.update") ? "Usage: /notesmp <updates|update|version|activitylog on|off>" : "Usage: /notesmp version");
             }
             return true;
         }
@@ -532,9 +533,12 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         try {
             Statistic killEntity = Statistic.valueOf("KILL_ENTITY");
             for (EntityType entity : EntityType.values()) {
+                Class<?> entityClass = entity.getEntityClass();
+                if (entityClass == null || !LivingEntity.class.isAssignableFrom(entityClass)) continue;
                 try {
                     int count = player.getStatistic(killEntity, entity);
-                    if (count > 0) mobKills.put(entity.getKey().getKey(), count);
+                    // Send every living entity, including zeroes, so the website can render a complete list.
+                    mobKills.put(entity.getKey().getKey(), Math.max(0, count));
                 } catch (IllegalArgumentException ignored) { }
             }
         } catch (IllegalArgumentException | NoSuchFieldError ignored) { }
