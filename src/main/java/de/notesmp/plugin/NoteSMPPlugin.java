@@ -463,13 +463,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         activityLog("Collecting detailed statistics for " + player.getName() + " (" + uuid + ")");
         Map<String, Object> base = new LinkedHashMap<>();
         base.put("playtime_seconds", Math.max(0, player.getStatistic(Statistic.PLAY_ONE_MINUTE) / 20L));
-        base.put("blocks_broken", sumMaterialStatistic(player, Statistic.MINE_BLOCK, true));
-        base.put("blocks_placed", sumMaterialStatistic(player, Statistic.USE_ITEM, true));
-        base.put("deaths", player.getStatistic(Statistic.DEATHS));
-        base.put("kills", player.getStatistic(Statistic.PLAYER_KILLS));
-
+        base.put("deaths", safeStatistic(player, "DEATHS"));
         Map<String, Object> statistics = collectStatistics(player);
-        activityLog("Collected " + statistics.size() + " statistic entries for " + player.getName());
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("uuid", uuid.toString());
         payload.put("username", player.getName());
@@ -494,39 +489,56 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         return total;
     }
 
+    private int safeStatistic(OfflinePlayer player, String name) {
+        try { return player.getStatistic(Statistic.valueOf(name)); }
+        catch (IllegalArgumentException | NoSuchFieldError ignored) { return 0; }
+    }
+
     private Map<String, Object> collectStatistics(OfflinePlayer player) {
         Map<String, Object> values = new LinkedHashMap<>();
-        for (Statistic statistic : Statistic.values()) {
-            String baseId = statistic.getKey().toString();
+        String[][] requested = {
+            {"time_played", "PLAY_ONE_MINUTE"}, {"mob_kills", "MOB_KILLS"},
+            {"player_kills", "PLAYER_KILLS"}, {"deaths", "DEATHS"},
+            {"time_since_last_death", "TIME_SINCE_DEATH"},
+            {"damage_absorbed", "DAMAGE_ABSORBED"}, {"damage_dealt", "DAMAGE_DEALT"},
+            {"damage_resisted", "DAMAGE_RESISTED"}, {"damage_taken", "DAMAGE_TAKEN"},
+            {"jumps", "JUMP"}, {"sneak_time", "SNEAK_TIME"}, {"distance_climbed", "CLIMB_ONE_CM"},
+            {"distance_crouched", "CROUCH_ONE_CM"}, {"distance_fallen", "FALL_ONE_CM"},
+            {"distance_flown", "FLY_ONE_CM"}, {"distance_sprinted", "SPRINT_ONE_CM"},
+            {"distance_swum", "SWIM_ONE_CM"}, {"distance_walked", "WALK_ONE_CM"},
+            {"distance_walked_on_water", "WALK_ON_WATER_ONE_CM"},
+            {"distance_walked_under_water", "WALK_UNDER_WATER_ONE_CM"},
+            {"distance_by_boat", "BOAT_ONE_CM"}, {"distance_by_elytra", "AVIATE_ONE_CM"},
+            {"distance_by_happy_ghast", "HAPPY_GHAST_ONE_CM"}, {"distance_by_horse", "HORSE_ONE_CM"},
+            {"distance_by_minecart", "MINECART_ONE_CM"}, {"distance_by_nautilus", "NAUTILUS_ONE_CM"},
+            {"distance_by_pig", "PIG_ONE_CM"}, {"distance_by_strider", "STRIDER_ONE_CM"},
+            {"fish_caught", "FISH_CAUGHT"}, {"animals_bred", "BREED_ANIMALS"},
+            {"chests_opened", "OPEN_CHEST"}, {"barrels_opened", "OPEN_BARREL"},
+            {"shulker_boxes_opened", "OPEN_SHULKER_BOX"}, {"items_dropped", "DROP"},
+            {"items_enchanted", "ENCHANT_ITEM"}, {"talked_to_villagers", "TALKED_TO_VILLAGER"},
+            {"traded_with_villagers", "TRADED_WITH_VILLAGER"}, {"time_since_last_rest", "TIME_SINCE_REST"},
+            {"times_slept_in_a_bed", "SLEEP_IN_BED"}
+        };
+        for (String[] stat : requested) {
             try {
-                if (statistic.getType() == Statistic.Type.UNTYPED) {
-                    int value = player.getStatistic(statistic);
-                    values.put(baseId, value);
-                } else if (includeSubstatistics && statistic.getType() == Statistic.Type.BLOCK) {
-                    for (Material material : Material.values()) {
-                        if (!material.isBlock()) continue;
-                        try {
-                            int value = player.getStatistic(statistic, material);
-                            values.put(baseId + ":" + material.getKey(), value);
-                        } catch (IllegalArgumentException ignored) { }
-                    }
-                } else if (includeSubstatistics && statistic.getType() == Statistic.Type.ITEM) {
-                    for (Material material : Material.values()) {
-                        try {
-                            int value = player.getStatistic(statistic, material);
-                            values.put(baseId + ":" + material.getKey(), value);
-                        } catch (IllegalArgumentException ignored) { }
-                    }
-                } else if (includeSubstatistics && statistic.getType() == Statistic.Type.ENTITY) {
-                    for (EntityType entityType : EntityType.values()) {
-                        try {
-                            int value = player.getStatistic(statistic, entityType);
-                            values.put(baseId + ":" + entityType.getKey(), value);
-                        } catch (IllegalArgumentException ignored) { }
-                    }
-                }
-            } catch (IllegalArgumentException ignored) { }
+                Statistic statistic = Statistic.valueOf(stat[1]);
+                int value = player.getStatistic(statistic);
+                values.put(stat[0], stat[0].equals("time_played") ? Math.max(0, value / 20) : Math.max(0, value));
+            } catch (IllegalArgumentException | NoSuchFieldError ignored) {
+                values.put(stat[0], 0);
+            }
         }
+        Map<String, Object> mobKills = new LinkedHashMap<>();
+        try {
+            Statistic killEntity = Statistic.valueOf("KILL_ENTITY");
+            for (EntityType entity : EntityType.values()) {
+                try {
+                    int count = player.getStatistic(killEntity, entity);
+                    if (count > 0) mobKills.put(entity.getKey().getKey(), count);
+                } catch (IllegalArgumentException ignored) { }
+            }
+        } catch (IllegalArgumentException | NoSuchFieldError ignored) { }
+        values.put("mob_kill_breakdown", mobKills);
         return values;
     }
 
