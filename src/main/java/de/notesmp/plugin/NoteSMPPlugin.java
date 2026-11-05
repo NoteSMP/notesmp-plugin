@@ -132,7 +132,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                                 }
                                 Map<String, Object> record = new LinkedHashMap<>();
                                 record.put("advancementId", entry.getKey());
-                                record.put("title", advancement.getKey().getKey().replace('_', ' '));
+                                record.put("title", advancementTitle(advancement));
+                                record.put("icon", advancementIcon(advancement));
                                 record.put("earnedAt", earnedAt.toString());
                                 earned.add(record);
                             }
@@ -168,7 +169,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             }
             Map<String, Object> record = new LinkedHashMap<>();
             record.put("advancementId", advancement.getKey().toString());
-            record.put("title", advancement.getKey().getKey().replace('_', ' '));
+            record.put("title", advancementTitle(advancement));
+            record.put("icon", advancementIcon(advancement));
             record.put("earnedAt", earnedAt.toString());
             earned.add(record);
         }
@@ -523,6 +525,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                         record.put("advancement_id", item.get("advancementId"));
                         record.put("advancement_title", item.get("title"));
                         record.put("earned_at", item.get("earnedAt"));
+                        record.put("icon_name", item.get("icon"));
                         return record;
                     }).toList());
                     postJson(apiBase + "/v1/minecraft/live/response", toJson(payload), result -> {
@@ -569,7 +572,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 }
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("advancementId", entry.getKey());
-                item.put("title", advancement.getKey().getKey().replace('_', ' '));
+                item.put("title", advancementTitle(advancement));
+                item.put("icon", advancementIcon(advancement));
                 item.put("earnedAt", earnedAt.toString());
                 earned.add(item);
             }
@@ -579,6 +583,18 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         return earned;
     }
 
+
+    private String advancementTitle(org.bukkit.advancement.Advancement advancement) {
+        io.papermc.paper.advancement.AdvancementDisplay display = advancement.getDisplay();
+        return display == null
+                ? advancement.getKey().getKey().replace('_', ' ')
+                : net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(display.title());
+    }
+
+    private String advancementIcon(org.bukkit.advancement.Advancement advancement) {
+        io.papermc.paper.advancement.AdvancementDisplay display = advancement.getDisplay();
+        return display == null ? null : display.icon().getType().getKey().toString();
+    }
 
     private void sendPlayerStats(OfflinePlayer player) {
         if (!ready() || player.getName() == null) return;
