@@ -64,7 +64,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             consoleLog("ERROR", "Invalid API URL in plugins/NoteSMP/config.yml. Both URLs must be valid HTTP(S) URLs.");
         }
 
-        getServer().getPluginManager().registerEvents(this, this);\n        getServer().getScheduler().runTaskLater(this, this::reconcileSavedAdvancements, 100L);
+        getServer().getPluginManager().registerEvents(this, this);
         if (getCommand("verify") != null) getCommand("verify").setExecutor(this);
         if (getCommand("notesmp") != null) {
             getCommand("notesmp").setExecutor(this);
@@ -577,7 +577,9 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         activityLog("Collecting detailed statistics for " + player.getName() + " (" + uuid + ")");
         Map<String, Object> base = new LinkedHashMap<>();
         base.put("playtime_seconds", Math.max(0, player.getStatistic(Statistic.PLAY_ONE_MINUTE) / 20L));
-        base.put("deaths", safeStatistic(player, "DEATHS"));\n        base.put("blocks_placed", sumMaterialStatistic(player, Statistic.USE_ITEM, true));\n        base.put("blocks_broken", sumMaterialStatistic(player, Statistic.valueOf("MINE_BLOCK"), true));
+        base.put("deaths", safeStatistic(player, "DEATHS"));
+        base.put("blocks_placed", sumMaterialStatistic(player, Statistic.USE_ITEM, true));
+        base.put("blocks_broken", sumMaterialStatistic(player, Statistic.valueOf("MINE_BLOCK"), true));
         Map<String, Object> statistics = collectStatistics(player);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("uuid", uuid.toString());
