@@ -491,38 +491,40 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 .timeout(Duration.ofSeconds(8)).header("Authorization", "Bearer " + apiKey).GET().build();
         http.sendAsync(request, HttpResponse.BodyHandlers.ofString()).thenAccept(response -> {
             if (response.statusCode() < 200 || response.statusCode() >= 300) return;
-            try {
-                JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
-                if (!root.has("request") || !root.get("request").isJsonObject()) return;
-                JsonObject pending = root.getAsJsonObject("request");
-                String requestId = pending.get("requestId").getAsString();
-                UUID uuid = UUID.fromString(pending.get("uuid").getAsString());
-                OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
-                if (player.getName() == null) return;
-                Map<String, Object> statistics = collectStatistics(player);
-                List<Map<String, Object>> advancements = collectAdvancementsFromDisk(player);
-                Map<String, Object> payload = new LinkedHashMap<>();
-                payload.put("requestId", requestId);
-                payload.put("statistics", statistics.entrySet().stream().map(entry -> {
-                    Map<String, Object> item = new LinkedHashMap<>();
-                    item.put("stat_id", entry.getKey());
-                    item.put("stat_value", entry.getValue());
-                    return item;
-                }).toList());
-                payload.put("advancements", advancements.stream().map(item -> {
-                    Map<String, Object> record = new LinkedHashMap<>();
-                    record.put("advancement_id", item.get("advancementId"));
-                    record.put("advancement_title", item.get("title"));
-                    record.put("earned_at", item.get("earnedAt"));
-                    return record;
-                }).toList());
-                postJson(apiBase + "/v1/minecraft/live/response", toJson(payload), result -> {
-                    if (result == null || result.statusCode() < 200 || result.statusCode() >= 300)
-                        consoleLog("WARN", "Could not return live profile data for " + player.getName());
-                });
-            } catch (Exception exception) {
-                consoleLog("WARN", "Could not process live profile request: " + exception.getMessage());
-            }
+            getServer().getScheduler().runTask(this, () -> {
+                try {
+                    JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
+                    if (!root.has("request") || !root.get("request").isJsonObject()) return;
+                    JsonObject pending = root.getAsJsonObject("request");
+                    String requestId = pending.get("requestId").getAsString();
+                    UUID uuid = UUID.fromString(pending.get("uuid").getAsString());
+                    OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
+                    if (player.getName() == null) return;
+                    Map<String, Object> statistics = collectStatistics(player);
+                    List<Map<String, Object>> advancements = collectAdvancementsFromDisk(player);
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("requestId", requestId);
+                    payload.put("statistics", statistics.entrySet().stream().map(entry -> {
+                        Map<String, Object> item = new LinkedHashMap<>();
+                        item.put("stat_id", entry.getKey());
+                        item.put("stat_value", entry.getValue());
+                        return item;
+                    }).toList());
+                    payload.put("advancements", advancements.stream().map(item -> {
+                        Map<String, Object> record = new LinkedHashMap<>();
+                        record.put("advancement_id", item.get("advancementId"));
+                        record.put("advancement_title", item.get("title"));
+                        record.put("earned_at", item.get("earnedAt"));
+                        return record;
+                    }).toList());
+                    postJson(apiBase + "/v1/minecraft/live/response", toJson(payload), result -> {
+                        if (result == null || result.statusCode() < 200 || result.statusCode() >= 300)
+                            consoleLog("WARN", "Could not return live profile data for " + player.getName());
+                    });
+                } catch (Exception exception) {
+                    consoleLog("WARN", "Could not process live profile request: " + exception.getMessage());
+                }
+            });
         });
     }
 
