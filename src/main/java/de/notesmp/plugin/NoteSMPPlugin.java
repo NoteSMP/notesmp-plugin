@@ -630,7 +630,9 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             try { values.put(stat[0], Math.max(0, player.getStatistic(Statistic.valueOf(stat[1])))); }
             catch (IllegalArgumentException | NoSuchFieldError ignored) { values.put(stat[0], 0); }
         }
-        values.put("blocks_placed", sumMaterialStatistic(player, Statistic.valueOf("PLACE_BLOCK"), true));
+        // Bukkit has no PLACE_BLOCK statistic; USE_ITEM over block materials is the
+        // closest available persisted counter and avoids an invalid enum lookup.
+        values.put("blocks_placed", sumMaterialStatistic(player, Statistic.USE_ITEM, true));
         values.put("blocks_broken", sumMaterialStatistic(player, Statistic.valueOf("MINE_BLOCK"), true));
         return values;
     }
