@@ -502,8 +502,16 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                     if (player.getName() == null) return;
                     Map<String, Object> statistics = collectStatistics(player);
                     List<Map<String, Object>> advancements = collectAdvancementsFromDisk(player);
+                    Map<String, Object> baseStats = new LinkedHashMap<>();
+                    baseStats.put("playtime_seconds", Math.max(0, player.getStatistic(Statistic.PLAY_ONE_MINUTE) / 20L));
+                    baseStats.put("deaths", safeStatistic(player, "DEATHS"));
+                    baseStats.put("blocks_placed", sumMaterialStatistic(player, Statistic.USE_ITEM, true));
+                    baseStats.put("blocks_broken", sumMaterialStatistic(player, Statistic.valueOf("MINE_BLOCK"), true));
                     Map<String, Object> payload = new LinkedHashMap<>();
                     payload.put("requestId", requestId);
+                    payload.put("baseStats", baseStats);
+                    payload.put("firstJoin", isoDate(player.getFirstPlayed()));
+                    payload.put("lastSeen", isoDate(player.isOnline() ? System.currentTimeMillis() : player.getLastPlayed()));
                     payload.put("statistics", statistics.entrySet().stream().map(entry -> {
                         Map<String, Object> item = new LinkedHashMap<>();
                         item.put("stat_id", entry.getKey());
