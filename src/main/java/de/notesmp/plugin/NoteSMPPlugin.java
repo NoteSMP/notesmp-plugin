@@ -187,8 +187,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     @EventHandler
     public void onAdvancementDone(PlayerAdvancementDoneEvent event) {
-        // Advancement changes are included in the next complete 24-hour snapshot.
-        activityLog("Advancement earned by " + event.getPlayer().getName() + ": " + event.getAdvancement().getKey());
+        // Persist each unlock immediately; the daily full snapshot remains the reconciliation safety net.
+        syncPlayerAdvancements(event.getPlayer());
     }
 
     @EventHandler
@@ -551,6 +551,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         try {
             JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(file)).getAsJsonObject();
             for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
+                if (entry.getKey().startsWith("minecraft:recipes/")) continue;
                 org.bukkit.advancement.Advancement advancement = registry.get(entry.getKey());
                 if (advancement == null || !entry.getValue().isJsonObject()) continue;
                 JsonObject progress = entry.getValue().getAsJsonObject();
