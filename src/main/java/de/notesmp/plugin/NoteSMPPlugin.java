@@ -470,17 +470,19 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     private void runDailySnapshot() {
         if (!ready()) return;
-        // Snapshot every known player, including offline players with saved world statistics.
-        for (OfflinePlayer player : Bukkit.getOfflinePlayers()) {
-            if (player.getName() != null) sendPlayerStats(player);
-        }
-        reconcileSavedAdvancements();
-        try {
-            java.nio.file.Files.createDirectories(getDataFolder().toPath());
-            java.nio.file.Files.writeString(getDataFolder().toPath().resolve("last-full-snapshot.txt"), Long.toString(System.currentTimeMillis()));
-        } catch (Exception exception) {
-            consoleLog("WARN", "Could not persist daily snapshot timestamp: " + exception.getMessage());
-        }
+        // Bukkit player/statistic and advancement APIs are accessed on the server thread.
+        getServer().getScheduler().runTask(this, () -> {
+            for (OfflinePlayer player : Bukkit.getOfflinePlayers()) {
+                if (player.getName() != null) sendPlayerStats(player);
+            }
+            reconcileSavedAdvancements();
+            try {
+                java.nio.file.Files.createDirectories(getDataFolder().toPath());
+                java.nio.file.Files.writeString(getDataFolder().toPath().resolve("last-full-snapshot.txt"), Long.toString(System.currentTimeMillis()));
+            } catch (Exception exception) {
+                consoleLog("WARN", "Could not persist daily snapshot timestamp: " + exception.getMessage());
+            }
+        });
     }
 
     private void pollLiveProfileRequest() {
