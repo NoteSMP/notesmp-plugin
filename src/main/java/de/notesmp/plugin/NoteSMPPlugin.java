@@ -71,38 +71,23 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             getCommand("notesmp").setTabCompleter(this);
         }
 
-        long heartbeatTicks = Math.max(20L, getConfig().getLong("heartbeat.interval-seconds", 60L) * 20L);
-        // Publish an initial state promptly after startup instead of waiting a full interval.
-        getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 20L);
-        getServer().getScheduler().runTaskTimer(this, this::sendHeartbeat, heartbeatTicks, heartbeatTicks);
-        long statsPollTicks = Math.max(40L, getConfig().getLong("statistics.poll-interval-seconds", 5L) * 20L);
-        getServer().getScheduler().runTaskLaterAsynchronously(this, this::pollStatsRefreshRequest, 40L);
-        getServer().getScheduler().runTaskTimerAsynchronously(this, this::pollStatsRefreshRequest, statsPollTicks, statsPollTicks);
+        // The website owns server status checks. The plugin only sends a lightweight refresh signal.
+        getServer().getScheduler().runTaskLaterAsynchronously(this, this::requestWebsiteStatusRefresh, 20L);
+        getServer().getScheduler().runTaskLaterAsynchronously(this, this::pollLiveProfileRequest, 40L);
+        getServer().getScheduler().runTaskTimerAsynchronously(this, this::pollLiveProfileRequest, 40L, 40L);
+
+        long snapshotTicks = 24L * 60L * 60L * 20L;
+        getServer().getScheduler().runTaskLaterAsynchronously(this, this::runSnapshotIfDue, 100L);
+        getServer().getScheduler().runTaskTimerAsynchronously(this, this::runDailySnapshot, snapshotTicks, snapshotTicks);
 
         scheduleUpdateCheck();
-        consoleLog("INFO", "NoteSMP plugin enabled. Heartbeat and on-demand player-stat refresh polling scheduled.");
+        consoleLog("INFO", "NoteSMP plugin enabled. Live profile channel and 24-hour snapshot sync scheduled.");
     }
 
     @Override
     public void onDisable() {
-        // Wait briefly for the offline marker; asynchronous requests can be cancelled as
-        // the plugin/server shuts down, leaving the website stuck showing ONLINE.
-        if (ready()) {
-            try {
-                HttpRequest request = HttpRequest.newBuilder(URI.create(apiBase + "/v1/minecraft/offline"))
-                        .timeout(Duration.ofSeconds(5))
-                        .header("Authorization", "Bearer " + apiKey)
-                        .header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString("{}"))
-                        .build();
-                HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    consoleLog("WARN", "§6[NoteSMP]§r Could not mark server offline during shutdown (HTTP " + response.statusCode() + ").");
-                }
-            } catch (Exception exception) {
-                consoleLog("WARN", "Could not mark server offline during shutdown: " + exception.getMessage());
-            }
-        }
+        // Do not publish an offline/status payload. The website determines server status
+        // from a fresh public Minecraft status ping.
     }
 
     private void reconcileSavedAdvancements() {
@@ -202,38 +187,18 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     @EventHandler
     public void onAdvancementDone(PlayerAdvancementDoneEvent event) {
-        if (!ready()) return;
-        Player player = event.getPlayer();
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("uuid", player.getUniqueId().toString());
-        payload.put("username", player.getName());
-        payload.put("advancementId", event.getAdvancement().getKey().toString());
-        payload.put("title", event.getAdvancement().getKey().getKey().replace('_', ' '));
-        payload.put("earnedAt", Instant.now().toString());
-        activityLog("Advancement earned by " + player.getName() + ": " + event.getAdvancement().getKey());
-        postJson(apiBase + "/v1/minecraft/advancement", toJson(payload), response -> {
-            if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
-                consoleLog("WARN", "Advancement sync failed for " + player.getName()
-                        + (response == null ? " (network error)" : " (HTTP " + response.statusCode() + ")"));
-            }
-        });
+        // Advancement changes are included in the next complete 24-hour snapshot.
+        activityLog("Advancement earned by " + event.getPlayer().getName() + ": " + event.getAdvancement().getKey());
     }
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-        getServer().getScheduler().runTaskLater(this, () -> {
-            sendPlayerStats(player);
-            syncPlayerAdvancements(player);
-        }, 60L);
-        getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 1L);
+        getServer().getScheduler().runTaskLaterAsynchronously(this, this::requestWebsiteStatusRefresh, 1L);
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        // Capture the final loaded snapshot while the player is still available.
-        sendPlayerStats(event.getPlayer());
-        getServer().getScheduler().runTaskLater(this, this::sendHeartbeat, 1L);
+        getServer().getScheduler().runTaskLaterAsynchronously(this, this::requestWebsiteStatusRefresh, 1L);
     }
 
     @Override
@@ -487,46 +452,120 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         }
     }
 
-    private void sendHeartbeat() {
-        if (!ready()) { activityLog("Heartbeat skipped: API is not configured"); return; }
-        activityLog("Sending heartbeat; online players=" + Bukkit.getOnlinePlayers().size());
-        List<String> players = new ArrayList<>();
-        for (Player player : Bukkit.getOnlinePlayers()) players.add(player.getName());
+    private void requestWebsiteStatusRefresh() {
+        if (!ready()) return;
+        postJson(apiBase + "/v1/minecraft/status-refresh", "{}", response -> {
+            if (response == null || response.statusCode() < 200 || response.statusCode() >= 300)
+                consoleLog("WARN", "Website status refresh signal failed.");
+        });
+    }
 
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("playersOnline", players.size());
-        payload.put("maxPlayers", Bukkit.getMaxPlayers());
-        payload.put("motd", Bukkit.getMotd());
-        payload.put("version", Bukkit.getMinecraftVersion());
-        payload.put("onlinePlayers", players);
-        postJson(apiBase + "/v1/minecraft/heartbeat", toJson(payload), response -> {
-            if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
-                consoleLog("WARN", "Server heartbeat failed" + (response == null ? " (network error)" : " with HTTP " + response.statusCode()));
+    private void runSnapshotIfDue() {
+        java.nio.file.Path marker = getDataFolder().toPath().resolve("last-full-snapshot.txt");
+        long last = 0L;
+        try { if (java.nio.file.Files.exists(marker)) last = Long.parseLong(java.nio.file.Files.readString(marker).trim()); }
+        catch (Exception ignored) { }
+        if (System.currentTimeMillis() - last >= 24L * 60L * 60L * 1000L) runDailySnapshot();
+    }
+
+    private void runDailySnapshot() {
+        if (!ready()) return;
+        // Snapshot every known player, including offline players with saved world statistics.
+        for (OfflinePlayer player : Bukkit.getOfflinePlayers()) {
+            if (player.getName() != null) sendPlayerStats(player);
+        }
+        reconcileSavedAdvancements();
+        try {
+            java.nio.file.Files.createDirectories(getDataFolder().toPath());
+            java.nio.file.Files.writeString(getDataFolder().toPath().resolve("last-full-snapshot.txt"), Long.toString(System.currentTimeMillis()));
+        } catch (Exception exception) {
+            consoleLog("WARN", "Could not persist daily snapshot timestamp: " + exception.getMessage());
+        }
+    }
+
+    private void pollLiveProfileRequest() {
+        if (!ready()) return;
+        HttpRequest request = HttpRequest.newBuilder(URI.create(apiBase + "/v1/minecraft/live/poll"))
+                .timeout(Duration.ofSeconds(8)).header("Authorization", "Bearer " + apiKey).GET().build();
+        http.sendAsync(request, HttpResponse.BodyHandlers.ofString()).thenAccept(response -> {
+            if (response.statusCode() < 200 || response.statusCode() >= 300) return;
+            try {
+                JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
+                if (!root.has("request") || !root.get("request").isJsonObject()) return;
+                JsonObject pending = root.getAsJsonObject("request");
+                String requestId = pending.get("requestId").getAsString();
+                UUID uuid = UUID.fromString(pending.get("uuid").getAsString());
+                OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
+                if (player.getName() == null) return;
+                Map<String, Object> statistics = collectStatistics(player);
+                List<Map<String, Object>> advancements = collectAdvancementsFromDisk(player);
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("requestId", requestId);
+                payload.put("statistics", statistics.entrySet().stream().map(entry -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("stat_id", entry.getKey());
+                    item.put("stat_value", entry.getValue());
+                    return item;
+                }).toList());
+                payload.put("advancements", advancements.stream().map(item -> {
+                    Map<String, Object> record = new LinkedHashMap<>();
+                    record.put("advancement_id", item.get("advancementId"));
+                    record.put("advancement_title", item.get("title"));
+                    record.put("earned_at", item.get("earnedAt"));
+                    return record;
+                }).toList());
+                postJson(apiBase + "/v1/minecraft/live/response", toJson(payload), result -> {
+                    if (result == null || result.statusCode() < 200 || result.statusCode() >= 300)
+                        consoleLog("WARN", "Could not return live profile data for " + player.getName());
+                });
+            } catch (Exception exception) {
+                consoleLog("WARN", "Could not process live profile request: " + exception.getMessage());
             }
         });
     }
 
-    private void pollStatsRefreshRequest() {
-        if (!ready()) return;
-        HttpRequest request = HttpRequest.newBuilder(URI.create(apiBase + "/v1/minecraft/stats-request"))
-                .timeout(Duration.ofSeconds(10))
-                .header("Authorization", "Bearer " + apiKey)
-                .GET().build();
-        http.sendAsync(request, HttpResponse.BodyHandlers.ofString()).thenAccept(response -> {
-            if (response.statusCode() < 200 || response.statusCode() >= 300) return;
-            String body = response.body();
-            java.util.regex.Matcher uuidMatcher = java.util.regex.Pattern
-                    .compile("\\\"uuid\\\"\\s*:\\s*\\\"([0-9a-fA-F-]{36})\\\"").matcher(body);
-            if (!uuidMatcher.find()) return;
-            UUID uuid;
-            try { uuid = UUID.fromString(uuidMatcher.group(1)); }
-            catch (IllegalArgumentException ignored) { return; }
-            getServer().getScheduler().runTask(this, () -> {
-                OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
-                if (player.getName() != null) sendPlayerStats(player);
-            });
-        });
+    private List<Map<String, Object>> collectAdvancementsFromDisk(OfflinePlayer player) {
+        List<Map<String, Object>> earned = new ArrayList<>();
+        if (Bukkit.getWorlds().isEmpty() || player.getName() == null) return earned;
+        java.nio.file.Path file = Bukkit.getWorlds().get(0).getWorldFolder().toPath()
+                .resolve("advancements").resolve(player.getUniqueId() + ".json");
+        if (!java.nio.file.Files.isRegularFile(file)) return earned;
+        Map<String, org.bukkit.advancement.Advancement> registry = new LinkedHashMap<>();
+        java.util.Iterator<org.bukkit.advancement.Advancement> iterator = Bukkit.advancementIterator();
+        while (iterator.hasNext()) {
+            org.bukkit.advancement.Advancement advancement = iterator.next();
+            registry.put(advancement.getKey().toString(), advancement);
+        }
+        try {
+            JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(file)).getAsJsonObject();
+            for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
+                org.bukkit.advancement.Advancement advancement = registry.get(entry.getKey());
+                if (advancement == null || !entry.getValue().isJsonObject()) continue;
+                JsonObject progress = entry.getValue().getAsJsonObject();
+                JsonObject criteria = progress.has("criteria") && progress.get("criteria").isJsonObject()
+                        ? progress.getAsJsonObject("criteria") : new JsonObject();
+                boolean complete = !advancement.getRequirements().getRequirements().isEmpty()
+                        && advancement.getRequirements().getRequirements().stream().allMatch(requirement ->
+                            requirement.getRequiredCriteria().stream().anyMatch(criteria::has));
+                if (!complete) continue;
+                Instant earnedAt = Instant.now();
+                for (JsonElement date : criteria.asMap().values()) {
+                    if (!date.isJsonPrimitive() || !date.getAsJsonPrimitive().isString()) continue;
+                    try { Instant parsed = Instant.parse(date.getAsString()); if (parsed.isBefore(earnedAt)) earnedAt = parsed; }
+                    catch (Exception ignored) { }
+                }
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("advancementId", entry.getKey());
+                item.put("title", advancement.getKey().getKey().replace('_', ' '));
+                item.put("earnedAt", earnedAt.toString());
+                earned.add(item);
+            }
+        } catch (Exception exception) {
+            consoleLog("WARN", "Could not read live advancement file for " + player.getName() + ": " + exception.getMessage());
+        }
+        return earned;
     }
+
 
     private void sendPlayerStats(OfflinePlayer player) {
         if (!ready() || player.getName() == null) return;
