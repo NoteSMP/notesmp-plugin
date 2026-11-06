@@ -295,7 +295,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         Player player = event.getPlayer();
         // Create the public directory record immediately, without waiting for the
         // first advancement or the next daily statistics snapshot.
-        getServer().getScheduler().runTaskAsynchronously(this, () -> registerPlayerJoin(player));
+        registerPlayerJoin(player);
         getServer().getScheduler().runTaskLaterAsynchronously(this, this::requestWebsiteStatusRefresh, 1L);
     }
 
