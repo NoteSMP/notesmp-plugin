@@ -26,10 +26,10 @@ Live profile responses are intended for immediate display; the scheduled player-
 |---|---|---|
 | `/verify <six-digit-code>` | Completes Discord/Minecraft account linking. | `notesmp.verify` (default: true) |
 | `/notesmp version` | Shows the installed plugin version. | None |
-| `/notesmp updates` or `/notesmp update` | Checks and stages the latest plugin update; restart required to apply. | `notesmp.update` (default: op) |
+| `/notesmp update` | Checks and stages the latest plugin update; restart required to apply. | `notesmp.update` (default: op) |
 | `/notesmp playerdata update` | Manually submits the player-data snapshot for players active in the last 25 hours. | `notesmp.playerdata` (default: op) |
 | `/notesmp playerdata wipe` | Deletes player directory records, statistics, advancements and pending refreshes from D1. | `notesmp.playerdata` (default: op) |
-| `/notesmp activitylog on` or `/notesmp activitylog off` | Enables/disables detailed activity logging. | `notesmp.activitylog` (default: op) |
+| `/notesmp activitylog on\|off` | Enables/disables detailed activity logging. | `notesmp.activitylog` (default: op) |
 
 The player-data wipe does not delete website posts, events, gallery content, Discord configuration, account-link settings or creator records.
 
