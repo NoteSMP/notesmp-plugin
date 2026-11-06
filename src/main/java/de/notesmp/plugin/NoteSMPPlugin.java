@@ -27,6 +27,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,6 +37,97 @@ import java.util.Map;
 import java.util.UUID;
 
 public final class NoteSMPPlugin extends JavaPlugin implements Listener, CommandExecutor, TabCompleter {
+    private static final java.util.Set<String> MOB_KILL_ENTITY_TYPES = java.util.Set.of(
+            "ALLAY",
+            "ARMADILLO",
+            "AXOLOTL",
+            "BAT",
+            "BEE",
+            "BLAZE",
+            "BOGGED",
+            "BREEZE",
+            "CAMEL",
+            "CAMEL_HUSK",
+            "CAT",
+            "CAVE_SPIDER",
+            "CHICKEN",
+            "COD",
+            "COPPER_GOLEM",
+            "COW",
+            "CREEPER",
+            "DOLPHIN",
+            "DONKEY",
+            "DROWNED",
+            "ELDER_GUARDIAN",
+            "ENDER_DRAGON",
+            "ENDERMAN",
+            "ENDERMITE",
+            "EVOKER",
+            "FOX",
+            "FROG",
+            "GHAST",
+            "GIANT",
+            "GLOW_SQUID",
+            "GOAT",
+            "GUARDIAN",
+            "HAPPY_GHAST",
+            "HOGLIN",
+            "HORSE",
+            "HUSK",
+            "IRON_GOLEM",
+            "LLAMA",
+            "MAGMA_CUBE",
+            "MOOSHROOM",
+            "MULE",
+            "NAUTILUS",
+            "OCELOT",
+            "PANDA",
+            "PARCHED",
+            "PARROT",
+            "PHANTOM",
+            "PIG",
+            "PIGLIN",
+            "PIGLIN_BRUTE",
+            "PILLAGER",
+            "POLAR_BEAR",
+            "PUFFERFISH",
+            "RABBIT",
+            "RAVAGER",
+            "SALMON",
+            "SHEEP",
+            "SHULKER",
+            "SILVERFISH",
+            "SKELETON",
+            "SKELETON_HORSE",
+            "SLIME",
+            "SNIFFER",
+            "SNOW_GOLEM",
+            "SPIDER",
+            "SQUID",
+            "STRAY",
+            "STRIDER",
+            "TADPOLE",
+            "TRADER_LLAMA",
+            "TROPICAL_FISH",
+            "TURTLE",
+            "VEX",
+            "VILLAGER",
+            "VINDICATOR",
+            "WANDERING_TRADER",
+            "WARDEN",
+            "WITCH",
+            "WITHER",
+            "WITHER_SKELETON",
+            "WOLF",
+            "ZOGLIN",
+            "ZOMBIE",
+            "ZOMBIE_HORSE",
+            "ZOMBIE_NAUTILUS",
+            "ZOMBIE_VILLAGER",
+            "ZOMBIFIED_PIGLIN"
+    );
+    private static final long PLAYERDATA_ACTIVITY_WINDOW_MS = 25L * 60L * 60L * 1000L;
+
     private HttpClient http;
     private String apiBase;
     private String botBase;
@@ -76,12 +169,10 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         getServer().getScheduler().runTaskLaterAsynchronously(this, this::pollLiveProfileRequest, 40L);
         getServer().getScheduler().runTaskTimerAsynchronously(this, this::pollLiveProfileRequest, 40L, 40L);
 
-        long snapshotTicks = 24L * 60L * 60L * 20L;
-        getServer().getScheduler().runTaskLaterAsynchronously(this, this::runSnapshotIfDue, 100L);
-        getServer().getScheduler().runTaskTimerAsynchronously(this, this::runDailySnapshot, snapshotTicks, snapshotTicks);
+        scheduleNextPlayerDataUpdate();
 
         scheduleUpdateCheck();
-        consoleLog("INFO", "NoteSMP plugin enabled. Live profile channel and 24-hour snapshot sync scheduled.");
+        consoleLog("INFO", "NoteSMP plugin enabled. Player data sync scheduled daily at 05:00 server-local time.");
     }
 
     @Override
@@ -90,7 +181,9 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         // from a fresh public Minecraft status ping.
     }
 
-    private void reconcileSavedAdvancements() {
+    private void reconcileSavedAdvancements() { reconcileSavedAdvancements(System.currentTimeMillis()); }
+
+    private void reconcileSavedAdvancements(long now) {
         if (!ready() || Bukkit.getWorlds().isEmpty()) return;
         java.nio.file.Path directory = Bukkit.getWorlds().get(0).getWorldFolder().toPath().resolve("advancements");
         if (!java.nio.file.Files.isDirectory(directory)) return;
@@ -108,7 +201,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                         try { uuid = UUID.fromString(fileName.substring(0, fileName.length() - 5)); }
                         catch (IllegalArgumentException ignored) { return; }
                         OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
-                        if (player.getName() == null) return;
+                        if (player.getName() == null || !wasActiveWithinWindow(player, now)) return;
                         List<Map<String, Object>> earned = new ArrayList<>();
                         try {
                             JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(path)).getAsJsonObject();
@@ -207,6 +300,23 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 sender.sendMessage("Checking and staging the latest NoteSMP update. A server restart is required to apply it safely.");
                 activityLog("Manual plugin update check requested by " + sender.getName());
                 getServer().getScheduler().runTaskAsynchronously(this, () -> checkForUpdate(sender));
+            } else if (args.length >= 2 && args[0].equalsIgnoreCase("playerdata")) {
+                if (!sender.hasPermission("notesmp.playerdata")) {
+                    sender.sendMessage("You do not have permission to manage NoteSMP player data.");
+                } else if (args.length == 2 && args[1].equalsIgnoreCase("update")) {
+                    sender.sendMessage("Starting a player-data update for players active within the past 25 hours…");
+                    getServer().getScheduler().runTask(this, () -> runPlayerDataUpdate(sender));
+                } else if (args.length == 2 && args[1].equalsIgnoreCase("wipe")) {
+                    sender.sendMessage("Wiping NoteSMP player data from D1 (players, statistics, advancements and pending refreshes only)...");
+                    postJson(apiBase + "/v1/minecraft/playerdata/wipe", "{}", response -> {
+                        String message = response != null && response.statusCode() >= 200 && response.statusCode() < 300
+                                ? "Player data was wiped from D1. Website content and Discord configuration were left untouched."
+                                : "Player-data wipe failed" + (response == null ? " (network error)." : " (HTTP " + response.statusCode() + ").");
+                        getServer().getScheduler().runTask(this, () -> sender.sendMessage(message));
+                    });
+                } else {
+                    sender.sendMessage("Usage: /notesmp playerdata <update|wipe>");
+                }
             } else if (args.length == 2 && args[0].equalsIgnoreCase("activitylog") && sender.hasPermission("notesmp.activitylog")) {
                 if (!args[1].equalsIgnoreCase("on") && !args[1].equalsIgnoreCase("off")) {
                     sender.sendMessage("Usage: /notesmp activitylog <on|off>");
@@ -218,7 +328,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                     consoleLog("INFO", "Detailed activity log " + (activityLogEnabled ? "enabled" : "disabled") + " by " + sender.getName() + ".");
                 }
             } else {
-                sender.sendMessage(sender.hasPermission("notesmp.update") ? "Usage: /notesmp <updates|update|version|activitylog on|off>" : "Usage: /notesmp version");
+                sender.sendMessage("Usage: /notesmp <updates|update|version|playerdata update|playerdata wipe|activitylog on|off>");
             }
             return true;
         }
@@ -264,6 +374,11 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         if (args.length == 1) {
             if ("version".startsWith(prefix)) suggestions.add("version");
             if (sender.hasPermission("notesmp.update") && "update".startsWith(prefix)) suggestions.add("update");
+            if (sender.hasPermission("notesmp.playerdata") && "playerdata".startsWith(prefix)) suggestions.add("playerdata");
+        }
+        if (args.length == 2 && args[0].equalsIgnoreCase("playerdata") && sender.hasPermission("notesmp.playerdata")) {
+            if ("update".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("update");
+            if ("wipe".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("wipe");
         }
         if (args.length == 1 && sender.hasPermission("notesmp.activitylog") && "activitylog".startsWith(prefix)) suggestions.add("activitylog");
         if (args.length == 2 && args[0].equalsIgnoreCase("activitylog") && sender.hasPermission("notesmp.activitylog")) {
@@ -457,29 +572,41 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         });
     }
 
-    private void runSnapshotIfDue() {
-        java.nio.file.Path marker = getDataFolder().toPath().resolve("last-full-snapshot.txt");
-        long last = 0L;
-        try { if (java.nio.file.Files.exists(marker)) last = Long.parseLong(java.nio.file.Files.readString(marker).trim()); }
-        catch (Exception ignored) { }
-        if (System.currentTimeMillis() - last >= 24L * 60L * 60L * 1000L) runDailySnapshot();
+    private void scheduleNextPlayerDataUpdate() {
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.systemDefault());
+        ZonedDateTime next = now.withHour(5).withMinute(0).withSecond(0).withNano(0);
+        if (!next.isAfter(now)) next = next.plusDays(1);
+        long delayTicks = Math.max(1L, Duration.between(now, next).toMillis() / 50L);
+        activityLog("Next automatic player-data snapshot scheduled for " + next);
+        getServer().getScheduler().runTaskLater(this, () -> {
+            runPlayerDataUpdate(null);
+            scheduleNextPlayerDataUpdate();
+        }, delayTicks);
     }
 
-    private void runDailySnapshot() {
-        if (!ready()) return;
-        // Bukkit player/statistic and advancement APIs are accessed on the server thread.
-        getServer().getScheduler().runTask(this, () -> {
-            for (OfflinePlayer player : Bukkit.getOfflinePlayers()) {
-                if (player.getName() != null) sendPlayerStats(player);
-            }
-            reconcileSavedAdvancements();
-            try {
-                java.nio.file.Files.createDirectories(getDataFolder().toPath());
-                java.nio.file.Files.writeString(getDataFolder().toPath().resolve("last-full-snapshot.txt"), Long.toString(System.currentTimeMillis()));
-            } catch (Exception exception) {
-                consoleLog("WARN", "Could not persist daily snapshot timestamp: " + exception.getMessage());
-            }
-        });
+    private boolean wasActiveWithinWindow(OfflinePlayer player, long now) {
+        if (player.isOnline()) return true;
+        long lastPlayed = player.getLastPlayed();
+        return lastPlayed > 0L && now - lastPlayed <= PLAYERDATA_ACTIVITY_WINDOW_MS;
+    }
+
+    private void runPlayerDataUpdate(CommandSender requester) {
+        if (!ready()) {
+            if (requester != null) requester.sendMessage("Player-data update failed: API key or API URL is not configured.");
+            return;
+        }
+        long now = System.currentTimeMillis();
+        int eligible = 0;
+        for (OfflinePlayer player : Bukkit.getOfflinePlayers()) {
+            if (player.getName() == null || !wasActiveWithinWindow(player, now)) continue;
+            eligible++;
+            sendPlayerStats(player);
+        }
+        reconcileSavedAdvancements(now);
+        String message = "Player-data snapshot submitted for " + eligible
+                + " player(s) active within the past 25 hours. Advancements were reconciled.";
+        consoleLog("INFO", message);
+        if (requester != null) requester.sendMessage(message);
     }
 
     private void pollLiveProfileRequest() {
@@ -669,7 +796,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     }
 
     private void sendPlayerStats(OfflinePlayer player) {
-        if (!ready() || player.getName() == null) return;
+        if (!ready() || player.getName() == null || !wasActiveWithinWindow(player, System.currentTimeMillis())) return;
         UUID uuid = player.getUniqueId();
         activityLog("Collecting detailed statistics for " + player.getName() + " (" + uuid + ")");
         Map<String, Object> base = new LinkedHashMap<>();
@@ -731,10 +858,11 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             try { values.put(stat[0], Math.max(0, player.getStatistic(Statistic.valueOf(stat[1])))); }
             catch (IllegalArgumentException | NoSuchFieldError ignored) { values.put(stat[0], 0); }
         }
-        // Store per-entity kill counters for the website's mob-kill grid.
-        for (EntityType entityType : EntityType.values()) {
-            if (entityType == EntityType.PLAYER || !entityType.isAlive()) continue;
+        // Only actual vanilla mobs belong in the website's mob-kill grid.
+        // Keep zero values for valid mobs so the snapshot is a complete, stable set.
+        for (String entityName : MOB_KILL_ENTITY_TYPES) {
             try {
+                EntityType entityType = EntityType.valueOf(entityName);
                 long kills = Math.max(0, player.getStatistic(Statistic.KILL_ENTITY, entityType));
                 values.put("minecraft:kill_entity:" + entityType.getKey().toString(), kills);
             } catch (IllegalArgumentException | NoSuchFieldError ignored) { }
