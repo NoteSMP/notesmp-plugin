@@ -1,49 +1,81 @@
 # NoteSMP Paper Plugin
 
-Paper plugin for Minecraft Java 26.3. It connects the MintServers Paper server to the NoteSMP Cloudflare API and Discord bot.
+Paper plugin connecting the NoteSMP Minecraft Java server to the NoteSMP Cloudflare API and Discord account-verification service.
+
+- **Plugin name:** `NoteSMP`
+- **Main class:** `de.notesmp.plugin.NoteSMPPlugin`
+- **Build:** Maven, Java 25, Paper API 26.3
+- **Configuration:** `plugins/NoteSMP/config.yml`
 
 ## Features
 
-- Sends server heartbeat data to the NoteSMP API every 60 seconds.
-- Publishes public player records and all non-zero vanilla statistics, including block, item and entity sub-statistics, every 5 minutes.
-- Sends stats for players regardless of whether their Discord account is verified.
-- Adds in-game `/verify <six-digit-code>` to complete the Discord account-linking flow.
+- Registers a player in the public website directory immediately when they join.
+- Signals the website/API to refresh server status after server startup, player join and player quit.
+- Answers live player-profile requests with current statistics and advancement data.
+- Saves a complete player-statistics snapshot to D1 every day at **05:00 Europe/Berlin**, for players online or last active within the preceding 25 hours.
+- Catches up the daily snapshot after startup if that day's 05:00 run was missed.
+- Records newly earned advancements immediately and reconciles the saved advancement history during scheduled snapshots.
+- Completes Discord/Minecraft account linking with in-game `/verify`.
+- Checks GitHub Releases for plugin updates and can stage an update for the next server restart.
 
-## Build
+Live profile responses are intended for immediate display; the scheduled player-data snapshot is the persisted statistics update. The plugin does not publish a periodic server heartbeat.
 
-The GitHub Actions workflow builds the plugin automatically on every push to `main`.
+## Commands and permissions
 
-1. Open the repository's **Actions** tab.
-2. Open the latest **Build NoteSMP Paper Plugin** run.
-3. Download the `notesmp-plugin` artifact after the run succeeds.
-4. Extract the JAR from the artifact.
+| Command | Purpose | Permission |
+|---|---|---|
+| `/verify <six-digit-code>` | Completes Discord/Minecraft account linking. | `notesmp.verify` (default: true) |
+| `/notesmp version` | Shows the installed plugin version. | None |
+| `/notesmp updates` or `/notesmp update` | Checks and stages the latest plugin update; restart required to apply. | `notesmp.update` (default: op) |
+| `/notesmp playerdata update` | Manually submits the player-data snapshot for players active in the last 25 hours. | `notesmp.playerdata` (default: op) |
+| `/notesmp playerdata wipe` | Deletes player directory records, statistics, advancements and pending refreshes from D1. | `notesmp.playerdata` (default: op) |
+| `/notesmp activitylog on|off` | Enables/disables detailed activity logging. | `notesmp.activitylog` (default: op) |
 
-The project targets Java 25 and Paper API 26.3. Paper's current Maven coordinates use the `26.3.build.*` format. See the [Paper project setup guide](https://docs.papermc.io/paper/dev/project-setup/).
+The player-data wipe does not delete website posts, events, gallery content, Discord configuration, account-link settings or creator records.
 
-## Install on MintServers
+## Configuration
 
-1. Stop the Minecraft server.
-2. Upload the plugin JAR to the server's `plugins/` folder.
-3. Start the server once so it creates `plugins/NoteSMP/config.yml`.
-4. Stop the server again and open that config.
-5. Set `api.key` to the same secret value used as `MINECRAFT_API_KEY` in both Cloudflare Workers:
-   - `notesmp-api`
-   - `notesmp-bot`
-6. Start the server.
+The plugin creates `plugins/NoteSMP/config.yml` on first start.
 
-Do not publish the API key or commit it to this repository.
+| Setting | Description |
+|---|---|
+| `api.base-url` | NoteSMP API Worker URL. |
+| `api.bot-url` | NoteSMP bot Worker URL. |
+| `api.key` | Shared `MINECRAFT_API_KEY` used by the API and bot Workers. |
+| `statistics.poll-interval-seconds` | How often the plugin checks for queued/live profile requests (default: 5 seconds). |
+| `statistics.include-substatistics` | Enables material/entity sub-statistics in explicit refresh responses. |
+| `updates.enabled` | Enables GitHub release checks. |
+| `updates.check-interval-minutes` | Update-check interval (default: 360 minutes). |
+| `activity-log.enabled` | Enables detailed request/synchronization diagnostics. |
 
-## Verification test
+The configuration also contains a legacy heartbeat interval setting; current status handling uses refresh signals and API-side Minecraft status checks, not periodic plugin heartbeat payloads.
 
-1. In Discord, run `/verify YourMinecraftName`.
-2. Copy the six-digit code from the private response.
-3. In Minecraft, run `/verify 123456` using the code you received.
-4. The plugin calls the bot's protected `/minecraft/verify` endpoint. The code is single-use and expires after two minutes.
+## Install on the server
 
-## Data flow
+1. Download the JAR from the [GitHub Releases](https://github.com/NoteSMP/notesmp-plugin/releases).
+2. Stop the Paper server.
+3. Upload the JAR to the server's `plugins/` directory.
+4. Start the server once to generate the plugin configuration.
+5. Set `api.key` to the same secret as `MINECRAFT_API_KEY` in both Cloudflare Workers.
+6. Restart the server and check the console for the NoteSMP startup message.
 
-- Heartbeat: `POST /v1/minecraft/heartbeat` on `notesmp-api`.
-- Player stats: `POST /minecraft/playerstats` on `notesmp-bot`.
-- Account verification: `POST /minecraft/verify` on `notesmp-bot`.
+The automatic updater stages a downloaded JAR; a restart is required before the new version is loaded.
 
-The bot and API Workers use the existing shared D1 database. No local PC process is required; the plugin runs inside the hosted Minecraft server.
+## Build from source
+
+Requirements: Java 25 and Maven.
+
+```bash
+mvn clean package
+```
+
+GitHub Actions builds on pushes to `main`, uploads a build artifact, and publishes a prerelease for main-branch builds. Version tags beginning with `v` publish a non-prerelease release.
+
+## Verification flow
+
+1. Run `/verify playername:<Minecraft-name>` in the NoteSMP Discord server.
+2. Copy the six-digit code from the private Discord response.
+3. Run `/verify <six-digit-code>` in Minecraft before the code expires.
+4. The in-game chat confirms when the Minecraft account has been linked.
+
+Never log or share API keys. Verification codes are short-lived and single-use.
