@@ -134,6 +134,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     private String apiKey;
     private boolean includeSubstatistics;
     private boolean activityLogEnabled;
+    private final java.util.Set<String> submittedAdvancements = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     @Override
     public void onEnable() {
@@ -243,46 +244,58 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         }
     }
 
-    private void syncPlayerAdvancements(Player player) {
-        if (!ready() || !player.isOnline()) return;
-        List<Map<String, Object>> earned = new ArrayList<>();
-        java.util.Iterator<org.bukkit.advancement.Advancement> iterator = Bukkit.advancementIterator();
-        while (iterator.hasNext()) {
-            org.bukkit.advancement.Advancement advancement = iterator.next();
-            if ((advancement.getKey().getNamespace().equals("minecraft") && advancement.getKey().getKey().startsWith("recipes/"))) continue;
-            org.bukkit.advancement.AdvancementProgress progress = player.getAdvancementProgress(advancement);
-            if (!progress.isDone()) continue;
-            Instant earnedAt = Instant.now();
-            for (String criterion : progress.getAwardedCriteria()) {
-                java.util.Date date = progress.getDateAwarded(criterion);
-                if (date != null && date.toInstant().isBefore(earnedAt)) earnedAt = date.toInstant();
-            }
-            Map<String, Object> record = new LinkedHashMap<>();
-            record.put("advancementId", advancement.getKey().toString());
-            record.put("earnedAt", earnedAt.toString());
-            earned.add(record);
-        }
-        activityLog("Backfilling " + earned.size() + " earned advancements for " + player.getName());
+    private void registerPlayerJoin(Player player) {
+        if (!ready()) return;
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("uuid", player.getUniqueId().toString());
         payload.put("username", player.getName());
-        payload.put("advancements", earned);
-        postJson(apiBase + "/v1/minecraft/advancements", toJson(payload), response -> {
+        payload.put("firstJoin", isoDate(player.getFirstPlayed()));
+        payload.put("lastSeen", Instant.now().toString());
+        postJson(apiBase + "/v1/minecraft/player-join", toJson(payload), response -> {
+            if (response == null || response.statusCode() < 200 || response.statusCode() >= 300)
+                consoleLog("WARN", "Player registration failed for " + player.getName()
+                        + (response == null ? " (network error)" : " (HTTP " + response.statusCode() + ")"));
+        });
+    }
+
+    private void recordAdvancement(PlayerAdvancementDoneEvent event) {
+        Player player = event.getPlayer();
+        if (!ready() || !player.isOnline()) return;
+        String advancementId = event.getAdvancement().getKey().toString();
+        String dedupeKey = player.getUniqueId() + ":" + advancementId;
+        if (!submittedAdvancements.add(dedupeKey)) return;
+        Instant earnedAt = Instant.now();
+        org.bukkit.advancement.AdvancementProgress progress = player.getAdvancementProgress(event.getAdvancement());
+        for (String criterion : progress.getAwardedCriteria()) {
+            java.util.Date date = progress.getDateAwarded(criterion);
+            if (date != null && date.toInstant().isBefore(earnedAt)) earnedAt = date.toInstant();
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("uuid", player.getUniqueId().toString());
+        payload.put("username", player.getName());
+        payload.put("advancementId", advancementId);
+        payload.put("earnedAt", earnedAt.toString());
+        activityLog("Recording advancement " + advancementId + " for " + player.getName());
+        postJson(apiBase + "/v1/minecraft/advancement", toJson(payload), response -> {
             if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
-                consoleLog("WARN", "Advancement history sync failed for " + player.getName()
+                submittedAdvancements.remove(dedupeKey);
+                consoleLog("WARN", "Advancement sync failed for " + player.getName()
                         + (response == null ? " (network error)" : " (HTTP " + response.statusCode() + ")"));
             }
         });
     }
-
     @EventHandler
     public void onAdvancementDone(PlayerAdvancementDoneEvent event) {
-        // Persist each unlock immediately; the daily full snapshot remains the reconciliation safety net.
-        syncPlayerAdvancements(event.getPlayer());
+        // Persist only this unlock; daily/startup reconciliation handles full snapshots.
+        recordAdvancement(event);
     }
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        // Create the public directory record immediately, without waiting for the
+        // first advancement or the next daily statistics snapshot.
+        getServer().getScheduler().runTaskAsynchronously(this, () -> registerPlayerJoin(player));
         getServer().getScheduler().runTaskLaterAsynchronously(this, this::requestWebsiteStatusRefresh, 1L);
     }
 
