@@ -552,9 +552,41 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     private List<Map<String, Object>> collectAdvancementsFromDisk(OfflinePlayer player) {
         List<Map<String, Object>> earned = new ArrayList<>();
-        if (Bukkit.getWorlds().isEmpty() || player.getName() == null) return earned;
+        if (player.getName() == null) return earned;
+
+        // Prefer Bukkit's live progress API when the player is online; use the world
+        // advancement JSON for offline profiles so the website can still request them.
+        Player onlinePlayer = player.getPlayer();
+        if (onlinePlayer != null && onlinePlayer.isOnline()) {
+            java.util.Iterator<org.bukkit.advancement.Advancement> liveIterator = Bukkit.advancementIterator();
+            while (liveIterator.hasNext()) {
+                org.bukkit.advancement.Advancement advancement = liveIterator.next();
+                String id = advancement.getKey().toString();
+                if (id.startsWith("minecraft:recipes/") || id.endsWith("/root")) continue;
+                org.bukkit.advancement.AdvancementProgress progress = onlinePlayer.getAdvancementProgress(advancement);
+                if (!progress.isDone()) continue;
+                Instant earnedAt = Instant.now();
+                for (String criterion : progress.getAwardedCriteria()) {
+                    java.util.Date date = progress.getDateAwarded(criterion);
+                    if (date != null && date.toInstant().isBefore(earnedAt)) earnedAt = date.toInstant();
+                }
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("advancementId", id);
+                item.put("title", advancementTitle(advancement));
+                item.put("icon", advancementIcon(advancement));
+                item.put("earnedAt", earnedAt.toString());
+                earned.add(item);
+            }
+            return earned;
+        }
+
+        if (Bukkit.getWorlds().isEmpty()) return earned;
         java.nio.file.Path file = Bukkit.getWorlds().get(0).getWorldFolder().toPath()
                 .resolve("advancements").resolve(player.getUniqueId() + ".json");
+        if (!java.nio.file.Files.isRegularFile(file)) {
+            activityLog("No saved advancement file found for " + player.getName() + " at " + file);
+            return earned;
+        }
         if (!java.nio.file.Files.isRegularFile(file)) return earned;
         Map<String, org.bukkit.advancement.Advancement> registry = new LinkedHashMap<>();
         java.util.Iterator<org.bukkit.advancement.Advancement> iterator = Bukkit.advancementIterator();
@@ -565,7 +597,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         try {
             JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(file)).getAsJsonObject();
             for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
-                if (entry.getKey().startsWith("minecraft:recipes/")) continue;
+                if (entry.getKey().startsWith("minecraft:recipes/") || entry.getKey().endsWith("/root")) continue;
                 org.bukkit.advancement.Advancement advancement = registry.get(entry.getKey());
                 if (advancement == null || !entry.getValue().isJsonObject()) continue;
                 JsonObject progress = entry.getValue().getAsJsonObject();
