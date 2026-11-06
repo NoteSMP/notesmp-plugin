@@ -309,7 +309,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         if (command.getName().equalsIgnoreCase("notesmp")) {
             if (args.length == 1 && args[0].equalsIgnoreCase("version")) {
                 sender.sendMessage("[NoteSMP] Running version " + getPluginMeta().getVersion() + ".");
-            } else if (args.length == 1 && (args[0].equalsIgnoreCase("update") || args[0].equalsIgnoreCase("updates")) && sender.hasPermission("notesmp.update")) {
+            } else if (args.length == 1 && args[0].equalsIgnoreCase("update") && sender.hasPermission("notesmp.update")) {
                 sender.sendMessage("Checking and staging the latest NoteSMP update. A server restart is required to apply it safely.");
                 activityLog("Manual plugin update check requested by " + sender.getName());
                 getServer().getScheduler().runTaskAsynchronously(this, () -> checkForUpdate(sender));
@@ -341,7 +341,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                     consoleLog("INFO", "Detailed activity log " + (activityLogEnabled ? "enabled" : "disabled") + " by " + sender.getName() + ".");
                 }
             } else {
-                sender.sendMessage("Usage: /notesmp <updates|update|version|playerdata update|playerdata wipe|activitylog on|off>");
+                sender.sendMessage("Usage: /notesmp <update|version|playerdata update|playerdata wipe|activitylog on|off>");
             }
             return true;
         }
