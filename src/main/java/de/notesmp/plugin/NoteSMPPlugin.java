@@ -113,7 +113,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                         try {
                             JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(path)).getAsJsonObject();
                             for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
-                                if (entry.getKey().startsWith("minecraft:recipes/")) continue;
+                                if (entry.getKey().startsWith("minecraft:recipes/") || entry.getKey().endsWith("/root")) continue;
                                 org.bukkit.advancement.Advancement advancement = registry.get(entry.getKey());
                                 if (advancement == null || !entry.getValue().isJsonObject()) continue;
                                 JsonObject progress = entry.getValue().getAsJsonObject();
@@ -158,7 +158,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         java.util.Iterator<org.bukkit.advancement.Advancement> iterator = Bukkit.advancementIterator();
         while (iterator.hasNext()) {
             org.bukkit.advancement.Advancement advancement = iterator.next();
-            if (advancement.getKey().getNamespace().equals("minecraft") && advancement.getKey().getKey().startsWith("recipes/")) continue;
+            if ((advancement.getKey().getNamespace().equals("minecraft") && advancement.getKey().getKey().startsWith("recipes/")) || advancement.getKey().getKey().endsWith("/root")) continue;
             org.bukkit.advancement.AdvancementProgress progress = player.getAdvancementProgress(advancement);
             if (!progress.isDone()) continue;
             Instant earnedAt = Instant.now();
