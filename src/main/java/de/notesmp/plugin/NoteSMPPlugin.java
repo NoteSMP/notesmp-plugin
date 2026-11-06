@@ -130,8 +130,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                                 }
                                 Map<String, Object> record = new LinkedHashMap<>();
                                 record.put("advancementId", entry.getKey());
-                                record.put("title", advancementTitle(advancement));
-                                record.put("icon", advancementIcon(advancement));
                                 record.put("earnedAt", earnedAt.toString());
                                 earned.add(record);
                             }
@@ -168,8 +166,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             }
             Map<String, Object> record = new LinkedHashMap<>();
             record.put("advancementId", advancement.getKey().toString());
-            record.put("title", advancementTitle(advancement));
-            record.put("icon", advancementIcon(advancement));
             record.put("earnedAt", earnedAt.toString());
             earned.add(record);
         }
@@ -523,8 +519,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                     payload.put("advancements", advancements.stream().map(item -> {
                         Map<String, Object> record = new LinkedHashMap<>();
                         record.put("advancement_id", item.get("advancementId"));
-                        record.put("advancement_title", item.get("title"));
-                        record.put("icon_name", item.get("icon"));
                         record.put("earned_at", item.get("earnedAt"));
                         return record;
                     }).toList());
@@ -572,8 +566,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 }
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("advancementId", id);
-                item.put("title", advancementTitle(advancement));
-                item.put("icon", advancementIcon(advancement));
                 item.put("earnedAt", earnedAt.toString());
                 earned.add(item);
             }
@@ -622,8 +614,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 }
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("advancementId", entry.getKey());
-                item.put("title", advancement == null ? entry.getKey() : advancementTitle(advancement));
-                item.put("icon", advancement == null ? null : advancementIcon(advancement));
                 item.put("earnedAt", earnedAt.toString());
                 earned.add(item);
             }
@@ -676,18 +666,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         var requirements = advancement.getRequirements().getRequirements();
         return !requirements.isEmpty() && requirements.stream().allMatch(requirement ->
                 requirement.getRequiredCriteria().stream().anyMatch(criteria::has));
-    }
-
-    private String advancementTitle(org.bukkit.advancement.Advancement advancement) {
-        io.papermc.paper.advancement.AdvancementDisplay display = advancement.getDisplay();
-        return display == null
-                ? advancement.getKey().getKey().replace('_', ' ')
-                : net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(display.title());
-    }
-
-    private String advancementIcon(org.bukkit.advancement.Advancement advancement) {
-        io.papermc.paper.advancement.AdvancementDisplay display = advancement.getDisplay();
-        return display == null ? null : display.icon().getType().getKey().toString();
     }
 
     private void sendPlayerStats(OfflinePlayer player) {
