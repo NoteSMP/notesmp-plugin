@@ -119,10 +119,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                                 JsonObject progress = entry.getValue().getAsJsonObject();
                                 JsonObject criteria = progress.has("criteria") && progress.get("criteria").isJsonObject()
                                         ? progress.getAsJsonObject("criteria") : new JsonObject();
-                                boolean complete = !advancement.getRequirements().getRequirements().isEmpty()
-                                        && advancement.getRequirements().getRequirements().stream().allMatch(requirement ->
-                                            requirement.getRequiredCriteria().stream().anyMatch(criteria::has));
-                                if (!complete) continue;
+                                if (!isAdvancementComplete(entry.getValue().getAsJsonObject(), advancement)) continue;
                                 Instant earnedAt = Instant.now();
                                 for (JsonElement date : criteria.asMap().values()) {
                                     if (!date.isJsonPrimitive() || !date.getAsJsonPrimitive().isString()) continue;
@@ -574,10 +571,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 JsonObject progress = entry.getValue().getAsJsonObject();
                 JsonObject criteria = progress.has("criteria") && progress.get("criteria").isJsonObject()
                         ? progress.getAsJsonObject("criteria") : new JsonObject();
-                boolean complete = !advancement.getRequirements().getRequirements().isEmpty()
-                        && advancement.getRequirements().getRequirements().stream().allMatch(requirement ->
-                            requirement.getRequiredCriteria().stream().anyMatch(criteria::has));
-                if (!complete) continue;
+                if (!isAdvancementComplete(progress, advancement)) continue;
                 Instant earnedAt = Instant.now();
                 for (JsonElement date : criteria.asMap().values()) {
                     if (!date.isJsonPrimitive() || !date.getAsJsonPrimitive().isString()) continue;
@@ -597,6 +591,17 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         return earned;
     }
 
+
+    private boolean isAdvancementComplete(JsonObject progress, org.bukkit.advancement.Advancement advancement) {
+        if (progress.has("done") && progress.get("done").isJsonPrimitive()
+                && progress.get("done").getAsJsonPrimitive().isBoolean()
+                && progress.get("done").getAsBoolean()) return true;
+        JsonObject criteria = progress.has("criteria") && progress.get("criteria").isJsonObject()
+                ? progress.getAsJsonObject("criteria") : new JsonObject();
+        var requirements = advancement.getRequirements().getRequirements();
+        return requirements.length > 0 && java.util.Arrays.stream(requirements).allMatch(requirement ->
+                java.util.Arrays.stream(requirement.getRequiredCriteria()).anyMatch(criteria::has));
+    }
 
     private String advancementTitle(org.bukkit.advancement.Advancement advancement) {
         io.papermc.paper.advancement.AdvancementDisplay display = advancement.getDisplay();
