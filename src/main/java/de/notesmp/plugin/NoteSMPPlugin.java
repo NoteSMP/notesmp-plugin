@@ -522,6 +522,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                         item.put("stat_value", entry.getValue());
                         return item;
                     }).toList());
+                    payload.put("totalAdvancements", countAvailableAdvancements());
                     payload.put("advancements", advancements.stream().map(item -> {
                         Map<String, Object> record = new LinkedHashMap<>();
                         record.put("advancement_id", item.get("advancementId"));
@@ -539,6 +540,17 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 }
             });
         });
+    }
+
+    private int countAvailableAdvancements() {
+        int total = 0;
+        java.util.Iterator<org.bukkit.advancement.Advancement> iterator = Bukkit.advancementIterator();
+        while (iterator.hasNext()) {
+            String id = iterator.next().getKey().toString();
+            if (id.startsWith("minecraft:recipes/") || id.matches(".*/root$")) continue;
+            total++;
+        }
+        return total;
     }
 
     private List<Map<String, Object>> collectAdvancementsFromDisk(OfflinePlayer player) {
