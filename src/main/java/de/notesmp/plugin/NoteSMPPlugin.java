@@ -589,12 +589,19 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(file)).getAsJsonObject();
             for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
                 if (entry.getKey().startsWith("minecraft:recipes/") || entry.getKey().endsWith("/root")) continue;
-                org.bukkit.advancement.Advancement advancement = registry.get(entry.getKey());
-                if (advancement == null || !entry.getValue().isJsonObject()) continue;
+                if (!entry.getValue().isJsonObject()) continue;
                 JsonObject progress = entry.getValue().getAsJsonObject();
                 JsonObject criteria = progress.has("criteria") && progress.get("criteria").isJsonObject()
                         ? progress.getAsJsonObject("criteria") : new JsonObject();
-                if (!isAdvancementComplete(progress, advancement)) continue;
+                org.bukkit.advancement.Advancement advancement = registry.get(entry.getKey());
+                // The saved player file's "done" flag is authoritative. Only consult
+                // Bukkit's requirements for older/custom progress entries without it.
+                boolean complete = progress.has("done")
+                        && progress.get("done").isJsonPrimitive()
+                        && progress.get("done").getAsJsonPrimitive().isBoolean()
+                        && progress.get("done").getAsBoolean();
+                if (!complete && advancement != null) complete = isAdvancementComplete(progress, advancement);
+                if (!complete) continue;
                 Instant earnedAt = Instant.now();
                 for (JsonElement date : criteria.asMap().values()) {
                     if (!date.isJsonPrimitive() || !date.getAsJsonPrimitive().isString()) continue;
@@ -606,6 +613,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 item.put("earnedAt", earnedAt.toString());
                 earned.add(item);
             }
+            activityLog("Read " + root.size() + " saved advancement entries for " + player.getName()
+                    + "; found " + earned.size() + " completed non-root advancements");
         } catch (Exception exception) {
             consoleLog("WARN", "Could not read live advancement file for " + player.getName() + ": " + exception.getMessage());
         }
@@ -614,23 +623,29 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
 
     private java.nio.file.Path findSavedAdvancementFile(UUID uuid) {
-        String fileName = uuid + ".json";
-        java.util.LinkedHashSet<java.nio.file.Path> worldFolders = new java.util.LinkedHashSet<>();
+        String fileName = uuid.toString() + ".json";
+        java.util.LinkedHashSet<java.nio.file.Path> candidates = new java.util.LinkedHashSet<>();
         for (org.bukkit.World world : Bukkit.getWorlds()) {
-            worldFolders.add(world.getWorldFolder().toPath());
+            candidates.add(world.getWorldFolder().toPath().resolve("advancements").resolve(fileName));
         }
         java.nio.file.Path container = getServer().getWorldContainer().toPath();
+        // Search recursively as server hosts often keep level-name/world folders nested
+        // below the configured world container rather than directly inside it.
         if (java.nio.file.Files.isDirectory(container)) {
-            try (java.util.stream.Stream<java.nio.file.Path> children = java.nio.file.Files.list(container)) {
-                children.filter(java.nio.file.Files::isDirectory).forEach(worldFolders::add);
+            try (java.util.stream.Stream<java.nio.file.Path> paths = java.nio.file.Files.walk(container, 7)) {
+                paths.filter(java.nio.file.Files::isRegularFile)
+                        .filter(path -> path.getFileName().toString().equalsIgnoreCase(fileName))
+                        .filter(path -> path.getParent() != null
+                                && path.getParent().getFileName().toString().equalsIgnoreCase("advancements"))
+                        .forEach(candidates::add);
             } catch (Exception exception) {
                 consoleLog("WARN", "Could not scan world container for offline advancements: " + exception.getMessage());
             }
         }
-        for (java.nio.file.Path worldFolder : worldFolders) {
-            java.nio.file.Path candidate = worldFolder.resolve("advancements").resolve(fileName);
+        for (java.nio.file.Path candidate : candidates) {
             if (java.nio.file.Files.isRegularFile(candidate)) return candidate;
         }
+        activityLog("Searched for offline advancement file " + fileName + " under " + container);
         return null;
     }
 
