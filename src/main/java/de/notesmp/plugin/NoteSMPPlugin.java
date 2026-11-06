@@ -130,8 +130,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                                 }
                                 Map<String, Object> record = new LinkedHashMap<>();
                                 record.put("advancementId", entry.getKey());
-                                record.put("title", advancementTitle(advancement));
-                                record.put("icon", advancementIcon(advancement));
                                 record.put("earnedAt", earnedAt.toString());
                                 earned.add(record);
                             }
@@ -168,8 +166,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             }
             Map<String, Object> record = new LinkedHashMap<>();
             record.put("advancementId", advancement.getKey().toString());
-            record.put("title", advancementTitle(advancement));
-            record.put("icon", advancementIcon(advancement));
             record.put("earnedAt", earnedAt.toString());
             earned.add(record);
         }
@@ -523,9 +519,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                     payload.put("advancements", advancements.stream().map(item -> {
                         Map<String, Object> record = new LinkedHashMap<>();
                         record.put("advancement_id", item.get("advancementId"));
-                        record.put("advancement_title", item.get("title"));
                         record.put("earned_at", item.get("earnedAt"));
-                        record.put("icon_name", item.get("icon"));
                         return record;
                     }).toList());
                     postJson(apiBase + "/v1/minecraft/live/response", toJson(payload), result -> {
@@ -572,22 +566,19 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 }
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("advancementId", id);
-                item.put("title", advancementTitle(advancement));
-                item.put("icon", advancementIcon(advancement));
                 item.put("earnedAt", earnedAt.toString());
                 earned.add(item);
             }
             return earned;
         }
 
-        if (Bukkit.getWorlds().isEmpty()) return earned;
-        java.nio.file.Path file = Bukkit.getWorlds().get(0).getWorldFolder().toPath()
-                .resolve("advancements").resolve(player.getUniqueId() + ".json");
-        if (!java.nio.file.Files.isRegularFile(file)) {
-            activityLog("No saved advancement file found for " + player.getName() + " at " + file);
+        java.nio.file.Path file = findSavedAdvancementFile(player.getUniqueId());
+        if (file == null) {
+            activityLog("No saved advancement file found for " + player.getName()
+                    + " (searched loaded world folders and the server world container)");
             return earned;
         }
-        if (!java.nio.file.Files.isRegularFile(file)) return earned;
+        activityLog("Reading offline advancements for " + player.getName() + " from " + file);
         Map<String, org.bukkit.advancement.Advancement> registry = new LinkedHashMap<>();
         java.util.Iterator<org.bukkit.advancement.Advancement> iterator = Bukkit.advancementIterator();
         while (iterator.hasNext()) {
@@ -612,8 +603,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 }
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("advancementId", entry.getKey());
-                item.put("title", advancementTitle(advancement));
-                item.put("icon", advancementIcon(advancement));
                 item.put("earnedAt", earnedAt.toString());
                 earned.add(item);
             }
@@ -623,6 +612,27 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         return earned;
     }
 
+
+    private java.nio.file.Path findSavedAdvancementFile(UUID uuid) {
+        String fileName = uuid + ".json";
+        java.util.LinkedHashSet<java.nio.file.Path> worldFolders = new java.util.LinkedHashSet<>();
+        for (org.bukkit.World world : Bukkit.getWorlds()) {
+            worldFolders.add(world.getWorldFolder().toPath());
+        }
+        java.nio.file.Path container = getServer().getWorldContainer().toPath();
+        if (java.nio.file.Files.isDirectory(container)) {
+            try (java.util.stream.Stream<java.nio.file.Path> children = java.nio.file.Files.list(container)) {
+                children.filter(java.nio.file.Files::isDirectory).forEach(worldFolders::add);
+            } catch (Exception exception) {
+                consoleLog("WARN", "Could not scan world container for offline advancements: " + exception.getMessage());
+            }
+        }
+        for (java.nio.file.Path worldFolder : worldFolders) {
+            java.nio.file.Path candidate = worldFolder.resolve("advancements").resolve(fileName);
+            if (java.nio.file.Files.isRegularFile(candidate)) return candidate;
+        }
+        return null;
+    }
 
     private boolean isAdvancementComplete(JsonObject progress, org.bukkit.advancement.Advancement advancement) {
         if (progress.has("done") && progress.get("done").isJsonPrimitive()
