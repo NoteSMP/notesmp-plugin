@@ -599,8 +599,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         JsonObject criteria = progress.has("criteria") && progress.get("criteria").isJsonObject()
                 ? progress.getAsJsonObject("criteria") : new JsonObject();
         var requirements = advancement.getRequirements().getRequirements();
-        return requirements.length > 0 && java.util.Arrays.stream(requirements).allMatch(requirement ->
-                java.util.Arrays.stream(requirement.getRequiredCriteria()).anyMatch(criteria::has));
+        return !requirements.isEmpty() && requirements.stream().allMatch(requirement ->
+                requirement.getRequiredCriteria().stream().anyMatch(criteria::has));
     }
 
     private String advancementTitle(org.bukkit.advancement.Advancement advancement) {
