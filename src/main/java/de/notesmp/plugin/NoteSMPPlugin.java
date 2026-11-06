@@ -573,7 +573,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     }
 
     private void scheduleNextPlayerDataUpdate() {
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.systemDefault());
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Europe/Berlin"));
         java.nio.file.Path marker = getDataFolder().toPath().resolve("last-playerdata-update-date.txt");
         String lastRunDate = "";
         try { if (java.nio.file.Files.exists(marker)) lastRunDate = java.nio.file.Files.readString(marker).trim(); }
@@ -589,7 +589,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             runPlayerDataUpdate(null);
             try {
                 java.nio.file.Files.createDirectories(getDataFolder().toPath());
-                java.nio.file.Files.writeString(marker, java.time.LocalDate.now(ZoneId.systemDefault()).toString());
+                java.nio.file.Files.writeString(marker, java.time.LocalDate.now(ZoneId.of("Europe/Berlin")).toString());
             } catch (Exception exception) {
                 consoleLog("WARN", "Could not persist player-data update date: " + exception.getMessage());
             }
