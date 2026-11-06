@@ -538,7 +538,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         java.util.Iterator<org.bukkit.advancement.Advancement> iterator = Bukkit.advancementIterator();
         while (iterator.hasNext()) {
             String id = iterator.next().getKey().toString();
-            if (id.startsWith("minecraft:recipes/") || id.matches(".*/root$")) continue;
+            if (id.startsWith("minecraft:recipes/")) continue;
             total++;
         }
         return total;
