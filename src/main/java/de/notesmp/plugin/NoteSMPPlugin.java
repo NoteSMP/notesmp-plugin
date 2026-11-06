@@ -574,12 +574,25 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     private void scheduleNextPlayerDataUpdate() {
         ZonedDateTime now = ZonedDateTime.now(ZoneId.systemDefault());
+        java.nio.file.Path marker = getDataFolder().toPath().resolve("last-playerdata-update-date.txt");
+        String lastRunDate = "";
+        try { if (java.nio.file.Files.exists(marker)) lastRunDate = java.nio.file.Files.readString(marker).trim(); }
+        catch (Exception ignored) { }
+        boolean missedToday = !now.toLocalTime().isBefore(java.time.LocalTime.of(5, 0))
+                && !lastRunDate.equals(now.toLocalDate().toString());
         ZonedDateTime next = now.withHour(5).withMinute(0).withSecond(0).withNano(0);
-        if (!next.isAfter(now)) next = next.plusDays(1);
+        if (missedToday) next = now.plusSeconds(1);
+        else if (!next.isAfter(now)) next = next.plusDays(1);
         long delayTicks = Math.max(1L, Duration.between(now, next).toMillis() / 50L);
         activityLog("Next automatic player-data snapshot scheduled for " + next);
         getServer().getScheduler().runTaskLater(this, () -> {
             runPlayerDataUpdate(null);
+            try {
+                java.nio.file.Files.createDirectories(getDataFolder().toPath());
+                java.nio.file.Files.writeString(marker, java.time.LocalDate.now(ZoneId.systemDefault()).toString());
+            } catch (Exception exception) {
+                consoleLog("WARN", "Could not persist player-data update date: " + exception.getMessage());
+            }
             scheduleNextPlayerDataUpdate();
         }, delayTicks);
     }
