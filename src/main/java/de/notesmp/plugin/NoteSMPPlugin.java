@@ -743,7 +743,15 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             try { values.put(stat[0], Math.max(0, player.getStatistic(Statistic.valueOf(stat[1])))); }
             catch (IllegalArgumentException | NoSuchFieldError ignored) { values.put(stat[0], 0); }
         }
-        // Store per-entity kills under namespaced keys consumed by the website mob-kill grid.\n        for (EntityType entityType : EntityType.values()) {\n            if (entityType == EntityType.PLAYER || !entityType.isAlive()) continue;\n            try {\n                long kills = Math.max(0, player.getStatistic(Statistic.KILL_ENTITY, entityType));\n                values.put("minecraft:kill_entity:" + entityType.getKey().toString(), kills);\n            } catch (IllegalArgumentException | NoSuchFieldError ignored) { }\n        }\n        // Bukkit has no PLACE_BLOCK statistic; USE_ITEM over block materials is the
+        // Store per-entity kill counters for the website's mob-kill grid.
+        for (EntityType entityType : EntityType.values()) {
+            if (entityType == EntityType.PLAYER || !entityType.isAlive()) continue;
+            try {
+                long kills = Math.max(0, player.getStatistic(Statistic.KILL_ENTITY, entityType));
+                values.put("minecraft:kill_entity:" + entityType.getKey().toString(), kills);
+            } catch (IllegalArgumentException | NoSuchFieldError ignored) { }
+        }
+        // Bukkit has no PLACE_BLOCK statistic; USE_ITEM over block materials is the
         // closest available persisted counter and avoids an invalid enum lookup.
         values.put("blocks_placed", sumMaterialStatistic(player, Statistic.USE_ITEM, true));
         values.put("blocks_broken", sumMaterialStatistic(player, Statistic.valueOf("MINE_BLOCK"), true));
