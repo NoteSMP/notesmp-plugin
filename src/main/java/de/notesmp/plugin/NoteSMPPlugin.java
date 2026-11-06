@@ -370,7 +370,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             getServer().getScheduler().runTask(this, () -> {
                 if (!player.isOnline()) return;
                 if (success) {
-                    player.sendMessage("Your Minecraft account is now linked to Discord. You can close this message.");
+                    player.sendMessage("Your Minecraft account is now linked to Discord. You can now return to Discord.");
                 } else {
                     player.sendMessage("Verification failed: the code may be expired, incorrect, or already used.");
                 }
