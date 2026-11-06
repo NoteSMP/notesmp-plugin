@@ -591,7 +591,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(file)).getAsJsonObject();
             for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
                 if (entry.getKey().startsWith("minecraft:recipes/") || entry.getKey().endsWith("/root")
-                        || !seenAdvancements.add(entry.getKey())) continue;
+                        || seenAdvancements.contains(entry.getKey())) continue;
                 if (!entry.getValue().isJsonObject()) continue;
                 JsonObject progress = entry.getValue().getAsJsonObject();
                 JsonObject criteria = progress.has("criteria") && progress.get("criteria").isJsonObject()
@@ -605,6 +605,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                         && progress.get("done").getAsBoolean();
                 if (!complete && advancement != null) complete = isAdvancementComplete(progress, advancement);
                 if (!complete) continue;
+                seenAdvancements.add(entry.getKey());
                 Instant earnedAt = Instant.now();
                 for (JsonElement date : criteria.asMap().values()) {
                     if (!date.isJsonPrimitive() || !date.getAsJsonPrimitive().isString()) continue;
