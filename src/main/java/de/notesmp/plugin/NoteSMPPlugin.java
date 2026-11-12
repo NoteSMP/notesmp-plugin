@@ -664,7 +664,26 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         // A stable release outranks a prerelease with the same numeric core.
         if (a.length == 1 && b.length > 1) return true;
         if (a.length > 1 && b.length == 1) return false;
-        if (a.length > 1) return a[1].compareToIgnoreCase(b[1]) > 0;
+        if (a.length == 1) return false;
+
+        // Compare prerelease identifiers numerically where possible:
+        // dev.102 must sort after dev.99, not before it alphabetically.
+        String[] ap = a[1].split("\\."), bp = b[1].split("\\.");
+        for (int i = 0; i < Math.max(ap.length, bp.length); i++) {
+            if (i >= ap.length) return false;
+            if (i >= bp.length) return true;
+            boolean ax = ap[i].matches("\\d+");
+            boolean bx = bp[i].matches("\\d+");
+            if (ax && bx) {
+                int compared = new java.math.BigInteger(ap[i]).compareTo(new java.math.BigInteger(bp[i]));
+                if (compared != 0) return compared > 0;
+            } else if (ax != bx) {
+                return ax;
+            } else {
+                int compared = ap[i].compareToIgnoreCase(bp[i]);
+                if (compared != 0) return compared > 0;
+            }
+        }
         return false;
     }
 
