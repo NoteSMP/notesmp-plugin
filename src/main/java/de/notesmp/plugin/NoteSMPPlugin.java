@@ -262,6 +262,9 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         Player player = event.getPlayer();
         if (!ready() || !player.isOnline()) return;
         String advancementId = event.getAdvancement().getKey().toString();
+        // Recipe unlocks are not public achievements and are intentionally excluded
+        // from the profile advancement list and its total count.
+        if (advancementId.startsWith("minecraft:recipes/")) return;
         String dedupeKey = player.getUniqueId() + ":" + advancementId;
         if (!submittedAdvancements.add(dedupeKey)) return;
         Instant earnedAt = Instant.now();
@@ -275,7 +278,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         payload.put("username", player.getName());
         payload.put("advancementId", advancementId);
         payload.put("earnedAt", earnedAt.toString());
-        activityLog("Recording advancement " + advancementId + " for " + player.getName());
         postJson(apiBase + "/v1/minecraft/advancement", toJson(payload), response -> {
             if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
                 submittedAdvancements.remove(dedupeKey);
@@ -901,7 +903,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     }
 
     private void postJson(String url, String body, java.util.function.Consumer<HttpResponse<String>> callback) {
-        activityLog("HTTP POST " + url + " payload=" + body);
+        activityLog("HTTP POST " + URI.create(url).getPath());
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(15))
                 .header("Authorization", "Bearer " + apiKey)
@@ -910,7 +912,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 .build();
         http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .whenComplete((response, error) -> {
-                    activityLog("HTTP result " + url + " -> " + (error != null ? "ERROR " + error.getMessage() : "HTTP " + response.statusCode()));
+                    activityLog("HTTP result " + URI.create(url).getPath() + " -> " + (error != null ? "ERROR " + error.getMessage() : "HTTP " + response.statusCode()));
                     if (error != null) {
                         consoleLog("WARN", "NoteSMP API request failed: " + error.getMessage());
                         if (callback != null) callback.accept(null);
