@@ -477,7 +477,9 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 return;
             }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                consoleLog("WARN", "GitHub update check returned HTTP " + response.statusCode()); return;
+                consoleLog("WARN", "GitHub update check returned HTTP " + response.statusCode());
+                replyUpdate(requester, "update-check-failed", "error", "GitHub returned HTTP " + response.statusCode() + ".");
+                return;
             }
 
             // GitHub's release listing can put stable releases ahead of newer dev builds.
