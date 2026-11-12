@@ -652,6 +652,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                     UUID uuid = UUID.fromString(pending.get("uuid").getAsString());
                     OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
                     if (player.getName() == null) return;
+                    activityLog("Looking up player data for " + player.getName() + "...");
                     Map<String, Object> statistics = collectStatistics(player);
                     List<Map<String, Object>> advancements = collectAdvancementsFromDisk(player);
                     Map<String, Object> baseStats = new LinkedHashMap<>();
@@ -733,7 +734,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                     + " (searched loaded world folders and the server world container)");
             return earned;
         }
-        activityLog("Reading offline advancements for " + player.getName() + " from " + files.size() + " world file(s): " + files);
         Map<String, org.bukkit.advancement.Advancement> registry = new LinkedHashMap<>();
         java.util.Iterator<org.bukkit.advancement.Advancement> iterator = Bukkit.advancementIterator();
         while (iterator.hasNext()) {
@@ -772,14 +772,11 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                 item.put("earnedAt", earnedAt.toString());
                 earned.add(item);
             }
-            activityLog("Read " + root.size() + " saved advancement entries from " + file
-                    + " for " + player.getName());
           } catch (Exception exception) {
             consoleLog("WARN", "Could not read offline advancement file " + file + " for " + player.getName()
                     + ": " + exception.getMessage());
           }
         }
-        activityLog("Found " + earned.size() + " completed advancements across offline world files for " + player.getName());
         return earned;
     }
 
@@ -807,8 +804,6 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         List<java.nio.file.Path> existing = candidates.stream()
                 .filter(java.nio.file.Files::isRegularFile)
                 .toList();
-        activityLog("Searched for offline advancement file " + fileName + " under " + container
-                + "; found " + existing.size() + " file(s)");
         return existing;
     }
 
