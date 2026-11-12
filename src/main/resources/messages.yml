@@ -33,3 +33,6 @@ messages:
 
   player-only: "{prefix} This command can only be used in-game."
   notesmp-usage: "{prefix} Usage: /notesmp <update|version|playerdata update|playerdata wipe|activitylog on|off>"
+
+  link-not-set: "{prefix} The {label} link has not been set on the website yet."
+  link-load-failed: "{prefix} Could not load the website links right now. Please try again shortly."
