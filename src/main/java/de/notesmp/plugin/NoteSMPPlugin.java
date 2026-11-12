@@ -22,6 +22,12 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerAdvancementDoneEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -163,6 +169,9 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
         getServer().getPluginManager().registerEvents(this, this);
         if (getCommand("verify") != null) getCommand("verify").setExecutor(this);
+        for (String linkCommand : List.of("website", "modpack", "youtube", "bluemap", "donate")) {
+            if (getCommand(linkCommand) != null) getCommand(linkCommand).setExecutor(this);
+        }
         if (getCommand("notesmp") != null) {
             getCommand("notesmp").setExecutor(this);
             getCommand("notesmp").setTabCompleter(this);
@@ -311,6 +320,15 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        String commandName = command.getName().toLowerCase(Locale.ROOT);
+        if (commandName.equals("website")) {
+            sendClickableLink(sender, "Website", "https://www.notesmp.de");
+            return true;
+        }
+        if (List.of("modpack", "youtube", "bluemap", "donate").contains(commandName)) {
+            fetchWebsiteLink(sender, commandName);
+            return true;
+        }
         if (command.getName().equalsIgnoreCase("notesmp")) {
             if (args.length == 1 && args[0].equalsIgnoreCase("version")) {
                 sendMessage(sender, "version", "version", getPluginMeta().getVersion());
@@ -416,6 +434,60 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         saveResource("messages.yml", false);
         java.io.File file = new java.io.File(getDataFolder(), "messages.yml");
         messages = YamlConfiguration.loadConfiguration(file);
+    }
+
+    private void fetchWebsiteLink(CommandSender sender, String key) {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(apiBase + "/v1/content/links"))
+                .timeout(Duration.ofSeconds(10))
+                .header("Accept", "application/json")
+                .GET()
+                .build();
+        http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .whenComplete((response, error) -> getServer().getScheduler().runTask(this, () -> {
+                    if (error != null || response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
+                        sendMessage(sender, "link-load-failed");
+                        return;
+                    }
+                    try {
+                        JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
+                        String url = null;
+                        if (root.has("links") && root.get("links").isJsonArray()) {
+                            for (JsonElement item : root.getAsJsonArray("links")) {
+                                if (!item.isJsonObject()) continue;
+                                JsonObject link = item.getAsJsonObject();
+                                if (link.has("link_key") && key.equalsIgnoreCase(link.get("link_key").getAsString())) {
+                                    url = link.has("url") ? link.get("url").getAsString() : null;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!isHttpUrl(url)) {
+                            sendMessage(sender, "link-not-set", "label", linkLabel(key));
+                            return;
+                        }
+                        sendClickableLink(sender, linkLabel(key), url);
+                    } catch (Exception exception) {
+                        consoleLog("WARN", "Could not read website links: " + exception.getMessage());
+                        sendMessage(sender, "link-load-failed");
+                    }
+                }));
+    }
+
+    private void sendClickableLink(CommandSender sender, String label, String url) {
+        String prefix = messages == null ? "§f[§eNote§6SMP§f]§r" : messages.getString("prefix", "§f[§eNote§6SMP§f]§r");
+        Component message = LegacyComponentSerializer.legacySection().deserialize(prefix + " " + label + ": ")
+                .append(Component.text(url, NamedTextColor.GOLD)
+                        .decorate(TextDecoration.UNDERLINED)
+                        .clickEvent(ClickEvent.openUrl(url)));
+        sender.sendMessage(message);
+    }
+
+    private static String linkLabel(String key) {
+        return switch (key) {
+            case "youtube" -> "YouTube";
+            case "bluemap" -> "BlueMap";
+            default -> key.substring(0, 1).toUpperCase(Locale.ROOT) + key.substring(1);
+        };
     }
 
     private void sendMessage(CommandSender sender, String key, String... placeholders) {
