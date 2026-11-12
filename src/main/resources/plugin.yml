@@ -12,12 +12,35 @@ commands:
     description: Link your Minecraft account to your NoteSMP Discord account.
     usage: /verify <six-digit-code>
     permission: notesmp.verify
+  website:
+    description: Open the NoteSMP website.
+    usage: /website
+    permission: notesmp.links
+  modpack:
+    description: Show the configured NoteSMP modpack link.
+    usage: /modpack
+    permission: notesmp.links
+  youtube:
+    description: Show the configured NoteSMP YouTube link.
+    usage: /youtube
+    permission: notesmp.links
+  bluemap:
+    description: Show the configured NoteSMP BlueMap link.
+    usage: /bluemap
+    permission: notesmp.links
+  donate:
+    description: Show the configured NoteSMP donation link.
+    usage: /donate
+    permission: notesmp.links
 permissions:
   notesmp.update:
     description: Allows checking and staging NoteSMP plugin updates.
     default: op
   notesmp.verify:
     description: Allows a player to link their Minecraft account.
+    default: true
+  notesmp.links:
+    description: Allows players to view public NoteSMP website links.
     default: true
   notesmp.playerdata:
     description: Allows manually updating or wiping NoteSMP player data in D1.
