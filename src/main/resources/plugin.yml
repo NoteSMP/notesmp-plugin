@@ -16,6 +16,10 @@ commands:
     description: Open the NoteSMP website.
     usage: /website
     permission: notesmp.links
+  discord:
+    description: Show the NoteSMP Discord invite link.
+    usage: /discord
+    permission: notesmp.links
   modpack:
     description: Show the configured NoteSMP modpack link.
     usage: /modpack
