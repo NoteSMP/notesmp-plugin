@@ -207,7 +207,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
                         try {
                             JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(path)).getAsJsonObject();
                             for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
-                                if (entry.getKey().startsWith("minecraft:recipes/")) continue;
+                                if (entry.getKey().contains(":recipes/")) continue;
                                 org.bukkit.advancement.Advancement advancement = registry.get(entry.getKey());
                                 if (advancement == null || !entry.getValue().isJsonObject()) continue;
                                 JsonObject progress = entry.getValue().getAsJsonObject();
@@ -264,7 +264,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         String advancementId = event.getAdvancement().getKey().toString();
         // Recipe unlocks are not public achievements and are intentionally excluded
         // from the profile advancement list and its total count.
-        if (advancementId.startsWith("minecraft:recipes/")) return;
+        if (advancementId.contains(":recipes/")) return;
         String dedupeKey = player.getUniqueId() + ":" + advancementId;
         if (!submittedAdvancements.add(dedupeKey)) return;
         Instant earnedAt = Instant.now();
@@ -693,7 +693,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         java.util.Iterator<org.bukkit.advancement.Advancement> iterator = Bukkit.advancementIterator();
         while (iterator.hasNext()) {
             String id = iterator.next().getKey().toString();
-            if (id.startsWith("minecraft:recipes/")) continue;
+            if (id.contains(":recipes/")) continue;
             total++;
         }
         return total;
@@ -711,7 +711,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             while (liveIterator.hasNext()) {
                 org.bukkit.advancement.Advancement advancement = liveIterator.next();
                 String id = advancement.getKey().toString();
-                if (id.startsWith("minecraft:recipes/")) continue;
+                if (id.contains(":recipes/")) continue;
                 org.bukkit.advancement.AdvancementProgress progress = onlinePlayer.getAdvancementProgress(advancement);
                 if (!progress.isDone()) continue;
                 Instant earnedAt = Instant.now();
@@ -745,7 +745,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
           try {
             JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(file)).getAsJsonObject();
             for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
-                if (entry.getKey().startsWith("minecraft:recipes/")
+                if (entry.getKey().contains(":recipes/")
                         || seenAdvancements.contains(entry.getKey())) continue;
                 if (!entry.getValue().isJsonObject()) continue;
                 JsonObject progress = entry.getValue().getAsJsonObject();
