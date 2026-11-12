@@ -1,0 +1,35 @@
+# Player-facing NoteSMP messages.
+# You can use Minecraft color codes (§ or &) and placeholders such as {version}, {tag}, {status}, {error}, {filename}.
+prefix: "§f[§eNote§6SMP§f]§r"
+
+messages:
+  version: "{prefix} Running version {version}."
+  update-checking: "{prefix} Checking and staging the latest NoteSMP update. A server restart is required to apply it safely."
+  update-up-to-date: "{prefix} NoteSMP v{version} is up to date. No update queued."
+  update-downloaded: "{prefix} Downloaded NoteSMP {tag} to plugins/update/{filename}. Restart the server to apply it; the server will not be restarted automatically."
+  update-check-failed: "{prefix} Update check failed: {error}"
+  update-no-jar: "{prefix} Update {tag} is available, but its release does not contain a JAR file."
+  update-download-failed: "{prefix} Update JAR download failed or had an invalid size (HTTP {status})."
+
+  playerdata-update-starting: "{prefix} Starting a player-data update for players active within the past 25 hours…"
+  playerdata-update-not-configured: "{prefix} Player-data update failed: API key or API URL is not configured."
+  playerdata-update-complete: "{prefix} Player-data snapshot submitted for {count} player(s) active within the past 25 hours. Advancements were reconciled."
+  playerdata-wipe-starting: "{prefix} Wiping NoteSMP player data from D1 (players, statistics, advancements and pending refreshes only)..."
+  playerdata-wipe-success: "{prefix} Player data was wiped from D1. Website content and Discord configuration were left untouched."
+  playerdata-wipe-failed-network: "{prefix} Player-data wipe failed (network error)."
+  playerdata-wipe-failed-http: "{prefix} Player-data wipe failed (HTTP {status})."
+  playerdata-permission-denied: "{prefix} You do not have permission to manage NoteSMP player data."
+  playerdata-usage: "{prefix} Usage: /notesmp playerdata <update|wipe>"
+
+  activitylog-enabled: "{prefix} Detailed activity log is enabled."
+  activitylog-disabled: "{prefix} Detailed activity log is disabled."
+  activitylog-usage: "{prefix} Usage: /notesmp activitylog <on|off>"
+
+  verify-usage: "{prefix} Usage: /verify <six-digit-code>"
+  verify-not-configured: "{prefix} Account linking is not configured yet. Please contact an administrator."
+  verify-checking: "{prefix} Checking your NoteSMP verification code…"
+  verify-success: "{prefix} Your Minecraft account is now linked to Discord."
+  verify-failed: "{prefix} Verification failed: the code may be expired, incorrect, or already used."
+
+  player-only: "{prefix} This command can only be used in-game."
+  notesmp-usage: "{prefix} Usage: /notesmp <update|version|playerdata update|playerdata wipe|activitylog on|off>"
