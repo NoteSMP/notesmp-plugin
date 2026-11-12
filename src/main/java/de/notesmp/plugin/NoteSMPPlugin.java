@@ -11,6 +11,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -134,12 +135,14 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     private String apiKey;
     private boolean includeSubstatistics;
     private boolean activityLogEnabled;
+    private YamlConfiguration messages;
     private final java.util.Set<String> submittedAdvancements = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     @Override
     public void onEnable() {
         logUpdateNotice();
         saveDefaultConfig();
+        loadMessages();
         apiBase = trimSlash(getConfig().getString("api.base-url", "https://notesmp-api.notesmp-de.workers.dev"));
         botBase = trimSlash(getConfig().getString("api.bot-url", "https://notesmp-bot.notesmp-de.workers.dev"));
         apiKey = getConfig().getString("api.key", "").trim();
@@ -310,53 +313,58 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (command.getName().equalsIgnoreCase("notesmp")) {
             if (args.length == 1 && args[0].equalsIgnoreCase("version")) {
-                sender.sendMessage("[NoteSMP] Running version " + getPluginMeta().getVersion() + ".");
+                sendMessage(sender, "version", "version", getPluginMeta().getVersion());
             } else if (args.length == 1 && args[0].equalsIgnoreCase("update") && sender.hasPermission("notesmp.update")) {
-                sender.sendMessage("Checking and staging the latest NoteSMP update. A server restart is required to apply it safely.");
+                sendMessage(sender, "update-checking");
                 activityLog("Manual plugin update check requested by " + sender.getName());
                 getServer().getScheduler().runTaskAsynchronously(this, () -> checkForUpdate(sender));
             } else if (args.length >= 2 && args[0].equalsIgnoreCase("playerdata")) {
                 if (!sender.hasPermission("notesmp.playerdata")) {
-                    sender.sendMessage("You do not have permission to manage NoteSMP player data.");
+                    sendMessage(sender, "playerdata-permission-denied");
                 } else if (args.length == 2 && args[1].equalsIgnoreCase("update")) {
-                    sender.sendMessage("Starting a player-data update for players active within the past 25 hours…");
+                    sendMessage(sender, "playerdata-update-starting");
                     getServer().getScheduler().runTask(this, () -> runPlayerDataUpdate(sender));
                 } else if (args.length == 2 && args[1].equalsIgnoreCase("wipe")) {
-                    sender.sendMessage("Wiping NoteSMP player data from D1 (players, statistics, advancements and pending refreshes only)...");
+                    sendMessage(sender, "playerdata-wipe-starting");
                     postJson(apiBase + "/v1/minecraft/playerdata/wipe", "{}", response -> {
-                        String message = response != null && response.statusCode() >= 200 && response.statusCode() < 300
-                                ? "Player data was wiped from D1. Website content and Discord configuration were left untouched."
-                                : "Player-data wipe failed" + (response == null ? " (network error)." : " (HTTP " + response.statusCode() + ").");
-                        getServer().getScheduler().runTask(this, () -> sender.sendMessage(message));
+                        getServer().getScheduler().runTask(this, () -> {
+                            if (response != null && response.statusCode() >= 200 && response.statusCode() < 300) {
+                                sendMessage(sender, "playerdata-wipe-success");
+                            } else if (response == null) {
+                                sendMessage(sender, "playerdata-wipe-failed-network");
+                            } else {
+                                sendMessage(sender, "playerdata-wipe-failed-http", "status", String.valueOf(response.statusCode()));
+                            }
+                        });
                     });
                 } else {
-                    sender.sendMessage("Usage: /notesmp playerdata <update|wipe>");
+                    sendMessage(sender, "playerdata-usage");
                 }
             } else if (args.length == 2 && args[0].equalsIgnoreCase("activitylog") && sender.hasPermission("notesmp.activitylog")) {
                 if (!args[1].equalsIgnoreCase("on") && !args[1].equalsIgnoreCase("off")) {
-                    sender.sendMessage("Usage: /notesmp activitylog <on|off>");
+                    sendMessage(sender, "activitylog-usage");
                 } else {
                     activityLogEnabled = args[1].equalsIgnoreCase("on");
                     getConfig().set("activity-log.enabled", activityLogEnabled);
                     saveConfig();
-                    sender.sendMessage("NoteSMP detailed activity log is " + (activityLogEnabled ? "enabled" : "disabled") + ".");
+                    sendMessage(sender, activityLogEnabled ? "activitylog-enabled" : "activitylog-disabled");
                     consoleLog("INFO", "Detailed activity log " + (activityLogEnabled ? "enabled" : "disabled") + " by " + sender.getName() + ".");
                 }
             } else {
-                sender.sendMessage("Usage: /notesmp <update|version|playerdata update|playerdata wipe|activitylog on|off>");
+                sendMessage(sender, "notesmp-usage");
             }
             return true;
         }
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("This command can only be used in-game.");
+            sendMessage(sender, "player-only");
             return true;
         }
         if (args.length != 1 || !args[0].matches("\\d{6}")) {
-            player.sendMessage("Usage: /verify <six-digit-code>");
+            sendMessage(player, "verify-usage");
             return true;
         }
         if (!ready()) {
-            player.sendMessage("NoteSMP account linking is not configured yet. Please contact an administrator.");
+            sendMessage(player, "verify-not-configured");
             return true;
         }
 
@@ -364,7 +372,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         String body = "{\"code\":" + quote(code)
                 + ",\"minecraftUuid\":" + quote(player.getUniqueId().toString())
                 + ",\"minecraftName\":" + quote(player.getName()) + "}";
-        player.sendMessage("Checking your NoteSMP verification code…");
+        sendMessage(player, "verify-checking");
 
         postJson(botBase + "/minecraft/verify", body, response -> {
             boolean success = response != null && response.statusCode() >= 200 && response.statusCode() < 300
@@ -372,9 +380,9 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             getServer().getScheduler().runTask(this, () -> {
                 if (!player.isOnline()) return;
                 if (success) {
-                    player.sendMessage("Your Minecraft account is now linked to Discord. You can now return to Discord.");
+                    sendMessage(player, "verify-success");
                 } else {
-                    player.sendMessage("Verification failed: the code may be expired, incorrect, or already used.");
+                    sendMessage(player, "verify-failed");
                 }
             });
         });
@@ -401,6 +409,25 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             if ("off".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("off");
         }
         return suggestions;
+    }
+
+    private void loadMessages() {
+        if (!getDataFolder().exists()) getDataFolder().mkdirs();
+        saveResource("messages.yml", false);
+        java.io.File file = new java.io.File(getDataFolder(), "messages.yml");
+        messages = YamlConfiguration.loadConfiguration(file);
+    }
+
+    private void sendMessage(CommandSender sender, String key, String... placeholders) {
+        if (sender == null) return;
+        String prefix = messages == null ? "§f[§eNote§6SMP§f]§r" : messages.getString("prefix", "§f[§eNote§6SMP§f]§r");
+        String text = messages == null ? "{prefix} " + key : messages.getString("messages." + key, "{prefix} Missing message: " + key);
+        text = text.replace("{prefix}", prefix);
+        for (int i = 0; i + 1 < placeholders.length; i += 2) {
+            text = text.replace("{" + placeholders[i] + "}", placeholders[i + 1] == null ? "" : placeholders[i + 1]);
+        }
+        text = org.bukkit.ChatColor.translateAlternateColorCodes('&', text);
+        sender.sendMessage(text);
     }
 
     private void activityLog(String message) {
@@ -445,7 +472,10 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.github.com/repos/NoteSMP/notesmp-plugin/releases?per_page=100"))
                     .timeout(Duration.ofSeconds(15)).header("Accept", "application/vnd.github+json").GET().build();
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() == 404) return;
+            if (response.statusCode() == 404) {
+                replyUpdate(requester, "update-check-failed", "error", "GitHub returned HTTP 404.");
+                return;
+            }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 consoleLog("WARN", "GitHub update check returned HTTP " + response.statusCode()); return;
             }
@@ -465,7 +495,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             }
             if (selectedRelease == null || latest == null
                     || !isNewerVersion(latest, getPluginMeta().getVersion())) {
-                replyUpdate(requester, "NoteSMP v" + getPluginMeta().getVersion() + " is up to date. No update queued.");
+                replyUpdate(requester, "update-up-to-date", "version", getPluginMeta().getVersion());
                 return;
             }
 
@@ -474,12 +504,18 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             java.util.regex.Matcher m = java.util.regex.Pattern.compile(
                     "\\\"browser_download_url\\\"\\s*:\\s*\\\"(https://github\\.com/NoteSMP/notesmp-plugin/releases/download/[^\\\"\\s]+\\.jar)\\\"")
                     .matcher(selectedRelease);
-            if (!m.find()) { getLogger().warning("Release " + tag + " has no JAR asset."); return; }
+            if (!m.find()) {
+                consoleLog("WARN", "Release " + tag + " has no JAR asset.");
+                replyUpdate(requester, "update-no-jar", "tag", tag == null ? "unknown" : tag);
+                return;
+            }
             String url = m.group(1);
             HttpResponse<byte[]> jar = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60)).GET().build(),
                     HttpResponse.BodyHandlers.ofByteArray());
             if (jar.statusCode() < 200 || jar.statusCode() >= 300 || jar.body().length < 1024 || jar.body().length > 50 * 1024 * 1024) {
-                consoleLog("WARN", "Update JAR download failed or had an invalid size (HTTP " + jar.statusCode() + ")."); return;
+                consoleLog("WARN", "Update JAR download failed or had an invalid size (HTTP " + jar.statusCode() + ").");
+                replyUpdate(requester, "update-download-failed", "status", String.valueOf(jar.statusCode()));
+                return;
             }
             java.nio.file.Path dir = getDataFolder().getParentFile().toPath().resolve("update");
             java.nio.file.Files.createDirectories(dir);
@@ -495,17 +531,16 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             }
             // Write the success marker only after the complete JAR is staged.
             java.nio.file.Files.writeString(getDataFolder().toPath().resolve("pending-update.txt"), tag + "\n" + (commit == null ? "unknown" : commit));
-            String updateMessage = "Downloaded NoteSMP " + tag + " to plugins/update/" + installedName + ". Restart the server to apply it; the server will not be restarted automatically.";
-            consoleLog("INFO", updateMessage);
-            replyUpdate(requester, updateMessage);
+            consoleLog("INFO", "Downloaded NoteSMP " + tag + " to plugins/update/" + installedName + ". Restart the server to apply it; the server will not be restarted automatically.");
+            replyUpdate(requester, "update-downloaded", "tag", tag, "filename", installedName);
         } catch (Exception ex) {
             consoleLog("WARN", "Update check failed: " + ex.getMessage());
-            replyUpdate(requester, "Update check failed: " + ex.getMessage());
+            replyUpdate(requester, "update-check-failed", "error", ex.getMessage());
         }
     }
 
-    private void replyUpdate(CommandSender requester, String message) {
-        if (requester != null) getServer().getScheduler().runTask(this, () -> requester.sendMessage("[NoteSMP] " + message));
+    private void replyUpdate(CommandSender requester, String key, String... placeholders) {
+        if (requester != null) getServer().getScheduler().runTask(this, () -> sendMessage(requester, key, placeholders));
     }
 
     private static List<String> jsonArrayObjects(String json) {
@@ -620,7 +655,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     private void runPlayerDataUpdate(CommandSender requester) {
         if (!ready()) {
-            if (requester != null) requester.sendMessage("Player-data update failed: API key or API URL is not configured.");
+            if (requester != null) sendMessage(requester, "playerdata-update-not-configured");
             return;
         }
         long now = System.currentTimeMillis();
@@ -634,7 +669,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         String message = "Player-data snapshot submitted for " + eligible
                 + " player(s) active within the past 25 hours. Advancements were reconciled.";
         consoleLog("INFO", message);
-        if (requester != null) requester.sendMessage(message);
+        if (requester != null) sendMessage(requester, "playerdata-update-complete", "count", String.valueOf(eligible));
     }
 
     private void pollLiveProfileRequest() {
