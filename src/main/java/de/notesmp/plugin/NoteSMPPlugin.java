@@ -169,7 +169,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
         getServer().getPluginManager().registerEvents(this, this);
         if (getCommand("verify") != null) getCommand("verify").setExecutor(this);
-        for (String linkCommand : List.of("website", "modpack", "youtube", "bluemap", "donate")) {
+        for (String linkCommand : List.of("website", "discord", "modpack", "youtube", "bluemap", "donate")) {
             if (getCommand(linkCommand) != null) getCommand(linkCommand).setExecutor(this);
         }
         if (getCommand("notesmp") != null) {
@@ -325,7 +325,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             sendClickableLink(sender, "Website", "https://www.notesmp.de");
             return true;
         }
-        if (List.of("modpack", "youtube", "bluemap", "donate").contains(commandName)) {
+        if (List.of("discord", "modpack", "youtube", "bluemap", "donate").contains(commandName)) {
             fetchWebsiteLink(sender, commandName);
             return true;
         }
@@ -485,6 +485,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     private static String linkLabel(String key) {
         return switch (key) {
             case "youtube" -> "YouTube";
+            case "discord" -> "Discord";
             case "bluemap" -> "BlueMap";
             default -> key.substring(0, 1).toUpperCase(Locale.ROOT) + key.substring(1);
         };
