@@ -903,7 +903,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     }
 
     private void postJson(String url, String body, java.util.function.Consumer<HttpResponse<String>> callback) {
-        activityLog("HTTP POST " + URI.create(url).getPath());
+        activityLog("HTTP POST " + URI.create(url).getPath() + " request payload: " + body);
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(15))
                 .header("Authorization", "Bearer " + apiKey)
