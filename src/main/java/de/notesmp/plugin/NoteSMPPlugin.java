@@ -330,47 +330,52 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             return true;
         }
         if (command.getName().equalsIgnoreCase("notesmp")) {
-            if (args.length == 1 && args[0].equalsIgnoreCase("version")) {
-                sendMessage(sender, "version", "version", getPluginMeta().getVersion());
-            } else if (args.length == 1 && args[0].equalsIgnoreCase("update") && sender.hasPermission("notesmp.update")) {
-                sendMessage(sender, "update-checking");
-                activityLog("Manual plugin update check requested by " + sender.getName());
-                getServer().getScheduler().runTaskAsynchronously(this, () -> checkForUpdate(sender));
-            } else if (args.length >= 2 && args[0].equalsIgnoreCase("playerdata")) {
-                if (!sender.hasPermission("notesmp.playerdata")) {
-                    sendMessage(sender, "playerdata-permission-denied");
-                } else if (args.length == 2 && args[1].equalsIgnoreCase("update")) {
-                    sendMessage(sender, "playerdata-update-starting");
-                    getServer().getScheduler().runTask(this, () -> runPlayerDataUpdate(sender));
-                } else if (args.length == 2 && args[1].equalsIgnoreCase("wipe")) {
-                    sendMessage(sender, "playerdata-wipe-starting");
-                    postJson(apiBase + "/v1/minecraft/playerdata/wipe", "{}", response -> {
-                        getServer().getScheduler().runTask(this, () -> {
-                            if (response != null && response.statusCode() >= 200 && response.statusCode() < 300) {
-                                sendMessage(sender, "playerdata-wipe-success");
-                            } else if (response == null) {
-                                sendMessage(sender, "playerdata-wipe-failed-network");
-                            } else {
-                                sendMessage(sender, "playerdata-wipe-failed-http", "status", String.valueOf(response.statusCode()));
-                            }
-                        });
-                    });
-                } else {
-                    sendMessage(sender, "playerdata-usage");
+            if (args.length == 0 || (args.length == 1 && args[0].equalsIgnoreCase("info"))) {
+                sendInfo(sender);
+            } else if (args.length == 1 && args[0].equalsIgnoreCase("help")) {
+                sendCommandLines(sender, "Commands:", List.of("/notesmp info"));
+            } else if (args.length == 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("help")) {
+                if (!sender.hasPermission("notesmp.admin")) sendMessage(sender, "admin-permission-denied");
+                else sendCommandLines(sender, "Commands:", List.of(
+                        "/notesmp activitylog on|off",
+                        "/notesmp playerdata update|wipe <player>",
+                        "/notesmp update",
+                        "/notesmp version"));
+            } else if (args.length == 1 && args[0].equalsIgnoreCase("version")) {
+                if (sender.hasPermission("notesmp.update")) sendMessage(sender, "version", "version", getPluginMeta().getVersion());
+                else sendMessage(sender, "admin-permission-denied");
+            } else if (args.length == 1 && args[0].equalsIgnoreCase("update")) {
+                if (!sender.hasPermission("notesmp.update")) sendMessage(sender, "admin-permission-denied");
+                else {
+                    sendMessage(sender, "update-checking");
+                    activityLog("Manual plugin update check requested by " + sender.getName());
+                    getServer().getScheduler().runTaskAsynchronously(this, () -> checkForUpdate(sender));
                 }
-            } else if (args.length == 2 && args[0].equalsIgnoreCase("activitylog") && sender.hasPermission("notesmp.activitylog")) {
-                if (!args[1].equalsIgnoreCase("on") && !args[1].equalsIgnoreCase("off")) {
-                    sendMessage(sender, "activitylog-usage");
-                } else {
+            } else if (args.length == 3 && args[0].equalsIgnoreCase("playerdata")) {
+                if (!sender.hasPermission("notesmp.playerdata")) sendMessage(sender, "playerdata-permission-denied");
+                else {
+                    OfflinePlayer target = Bukkit.getOfflinePlayer(args[2]);
+                    if (target.getName() == null || (!target.hasPlayedBefore() && !target.isOnline()))
+                        sendMessage(sender, "playerdata-player-not-found", "player", args[2]);
+                    else if (args[1].equalsIgnoreCase("update")) {
+                        sendMessage(sender, "playerdata-update-starting-player", "player", target.getName());
+                        getServer().getScheduler().runTask(this, () -> runPlayerDataUpdateFor(sender, target));
+                    } else if (args[1].equalsIgnoreCase("wipe")) {
+                        sendMessage(sender, "playerdata-wipe-starting", "player", target.getName());
+                        wipePlayerData(sender, target);
+                    } else sendMessage(sender, "playerdata-usage");
+                }
+            } else if (args.length == 2 && args[0].equalsIgnoreCase("activitylog")) {
+                if (!sender.hasPermission("notesmp.activitylog")) sendMessage(sender, "admin-permission-denied");
+                else if (!args[1].equalsIgnoreCase("on") && !args[1].equalsIgnoreCase("off")) sendMessage(sender, "activitylog-usage");
+                else {
                     activityLogEnabled = args[1].equalsIgnoreCase("on");
                     getConfig().set("activity-log.enabled", activityLogEnabled);
                     saveConfig();
                     sendMessage(sender, activityLogEnabled ? "activitylog-enabled" : "activitylog-disabled");
                     consoleLog("INFO", "Detailed activity log " + (activityLogEnabled ? "enabled" : "disabled") + " by " + sender.getName() + ".");
                 }
-            } else {
-                sendMessage(sender, "notesmp-usage");
-            }
+            } else sendMessage(sender, "notesmp-usage");
             return true;
         }
         if (!(sender instanceof Player player)) {
@@ -409,22 +414,25 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (!command.getName().equalsIgnoreCase("notesmp") || args.length < 1 || args.length > 2) return List.of();
+        if (!command.getName().equalsIgnoreCase("notesmp") || args.length < 1 || args.length > 3) return List.of();
         List<String> suggestions = new ArrayList<>();
-        String prefix = args[0].toLowerCase(Locale.ROOT);
+        String prefix = args[args.length - 1].toLowerCase(Locale.ROOT);
         if (args.length == 1) {
-            if ("version".startsWith(prefix)) suggestions.add("version");
-            if (sender.hasPermission("notesmp.update") && "update".startsWith(prefix)) suggestions.add("update");
-            if (sender.hasPermission("notesmp.playerdata") && "playerdata".startsWith(prefix)) suggestions.add("playerdata");
-        }
-        if (args.length == 2 && args[0].equalsIgnoreCase("playerdata") && sender.hasPermission("notesmp.playerdata")) {
-            if ("update".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("update");
-            if ("wipe".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("wipe");
-        }
-        if (args.length == 1 && sender.hasPermission("notesmp.activitylog") && "activitylog".startsWith(prefix)) suggestions.add("activitylog");
-        if (args.length == 2 && args[0].equalsIgnoreCase("activitylog") && sender.hasPermission("notesmp.activitylog")) {
-            if ("on".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("on");
-            if ("off".startsWith(args[1].toLowerCase(Locale.ROOT))) suggestions.add("off");
+            for (String option : List.of("help", "info")) if (option.startsWith(prefix)) suggestions.add(option);
+            if (sender.hasPermission("notesmp.admin")) {
+                for (String option : List.of("admin", "activitylog", "playerdata", "update", "version"))
+                    if (option.startsWith(prefix)) suggestions.add(option);
+            }
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("admin") && sender.hasPermission("notesmp.admin")) {
+            if ("help".startsWith(prefix)) suggestions.add("help");
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("playerdata") && sender.hasPermission("notesmp.playerdata")) {
+            for (String option : List.of("update", "wipe")) if (option.startsWith(prefix)) suggestions.add(option);
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("playerdata") && sender.hasPermission("notesmp.playerdata")
+                && (args[1].equalsIgnoreCase("update") || args[1].equalsIgnoreCase("wipe"))) {
+            for (Player online : Bukkit.getOnlinePlayers())
+                if (online.getName().toLowerCase(Locale.ROOT).startsWith(prefix)) suggestions.add(online.getName());
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("activitylog") && sender.hasPermission("notesmp.activitylog")) {
+            for (String option : List.of("on", "off")) if (option.startsWith(prefix)) suggestions.add(option);
         }
         return suggestions;
     }
@@ -747,6 +755,56 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         return lastPlayed > 0L && now - lastPlayed <= PLAYERDATA_ACTIVITY_WINDOW_MS;
     }
 
+    private void sendCommandLines(CommandSender sender, String heading, List<String> lines) {
+        String prefix = messages == null ? "§f[§eNote§6SMP§f]§r" : messages.getString("prefix", "§f[§eNote§6SMP§f]§r");
+        sender.sendMessage(prefix + " " + heading);
+        for (String line : lines) sender.sendMessage(line);
+    }
+
+    private void sendInfo(CommandSender sender) {
+        sendCommandLines(sender, "Info:", List.of("Season 1", "04.12.2026", "MC Java 26.3"));
+    }
+
+    private void runPlayerDataUpdateFor(CommandSender requester, OfflinePlayer player) {
+        if (!ready()) {
+            sendMessage(requester, "playerdata-update-not-configured");
+            return;
+        }
+        sendPlayerStats(player, true);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("uuid", player.getUniqueId().toString());
+        payload.put("username", player.getName());
+        payload.put("advancements", collectAdvancementsFromDisk(player));
+        postJson(apiBase + "/v1/minecraft/advancements", toJson(payload), response -> {
+            if (response == null || response.statusCode() < 200 || response.statusCode() >= 300)
+                consoleLog("WARN", "Advancement sync failed for " + player.getName()
+                        + (response == null ? " (network error)" : " (HTTP " + response.statusCode() + ")"));
+        });
+        sendMessage(requester, "playerdata-update-complete-player", "player", player.getName());
+    }
+
+    private void wipePlayerData(CommandSender requester, OfflinePlayer player) {
+        if (!ready()) {
+            sendMessage(requester, "playerdata-update-not-configured");
+            return;
+        }
+        String url = apiBase + "/v1/minecraft/playerdata/wipe/" + player.getUniqueId();
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(15))
+                .header("Authorization", "Bearer " + apiKey)
+                .POST(HttpRequest.BodyPublishers.noBody()).build();
+        activityLog("HTTP POST " + URI.create(url).getPath() + " request payload: <empty>");
+        http.sendAsync(request, HttpResponse.BodyHandlers.ofString()).whenComplete((response, error) -> {
+            activityLog("HTTP result " + URI.create(url).getPath() + " -> "
+                    + (error != null ? "ERROR " + error.getMessage() : "HTTP " + response.statusCode()));
+            getServer().getScheduler().runTask(this, () -> {
+                if (error != null || response == null) sendMessage(requester, "playerdata-wipe-failed-network");
+                else if (response.statusCode() >= 200 && response.statusCode() < 300)
+                    sendMessage(requester, "playerdata-wipe-success-player", "player", player.getName());
+                else sendMessage(requester, "playerdata-wipe-failed-http", "status", String.valueOf(response.statusCode()));
+            });
+        });
+    }
+
     private void runPlayerDataUpdate(CommandSender requester) {
         if (!ready()) {
             if (requester != null) sendMessage(requester, "playerdata-update-not-configured");
@@ -948,7 +1006,11 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     }
 
     private void sendPlayerStats(OfflinePlayer player) {
-        if (!ready() || player.getName() == null || !wasActiveWithinWindow(player, System.currentTimeMillis())) return;
+        sendPlayerStats(player, false);
+    }
+
+    private void sendPlayerStats(OfflinePlayer player, boolean force) {
+        if (!ready() || player.getName() == null || (!force && !wasActiveWithinWindow(player, System.currentTimeMillis()))) return;
         UUID uuid = player.getUniqueId();
         activityLog("Collecting detailed statistics for " + player.getName() + " (" + uuid + ")");
         Map<String, Object> base = new LinkedHashMap<>();
