@@ -12,14 +12,18 @@ messages:
   update-download-failed: "{prefix} Update JAR download failed or had an invalid size (HTTP {status})."
 
   playerdata-update-starting: "{prefix} Starting a player-data update for players active within the past 25 hours…"
+  playerdata-update-starting-player: "{prefix} Updating player data for {player}…"
+  playerdata-update-complete-player: "{prefix} Player-data snapshot and advancements submitted for {player}."
+  playerdata-player-not-found: "{prefix} Player {player} was not found. They must have joined the server at least once."
   playerdata-update-not-configured: "{prefix} Player-data update failed: API key or API URL is not configured."
   playerdata-update-complete: "{prefix} Player-data snapshot submitted for {count} player(s) active within the past 25 hours. Advancements were reconciled."
-  playerdata-wipe-starting: "{prefix} Wiping NoteSMP player data from D1 (players, statistics, advancements and pending refreshes only)..."
+  playerdata-wipe-starting: "{prefix} Wiping NoteSMP player data for {player} from D1…"
+  playerdata-wipe-success-player: "{prefix} Player data for {player} was wiped from D1."
   playerdata-wipe-success: "{prefix} Player data was wiped from D1. Website content and Discord configuration were left untouched."
   playerdata-wipe-failed-network: "{prefix} Player-data wipe failed (network error)."
   playerdata-wipe-failed-http: "{prefix} Player-data wipe failed (HTTP {status})."
   playerdata-permission-denied: "{prefix} You do not have permission to manage NoteSMP player data."
-  playerdata-usage: "{prefix} Usage: /notesmp playerdata <update|wipe>"
+  playerdata-usage: "{prefix} Usage: /notesmp playerdata <update|wipe> <player>"
 
   activitylog-enabled: "{prefix} Detailed activity log is enabled."
   activitylog-disabled: "{prefix} Detailed activity log is disabled."
@@ -32,7 +36,8 @@ messages:
   verify-failed: "{prefix} Verification failed: the code may be expired, incorrect, or already used."
 
   player-only: "{prefix} This command can only be used in-game."
-  notesmp-usage: "{prefix} Usage: /notesmp <update|version|playerdata update|playerdata wipe|activitylog on|off>"
+  admin-permission-denied: "{prefix} You do not have permission to use this administrator command."
+  notesmp-usage: "{prefix} Use /notesmp help for public commands or /notesmp admin help for administrator commands."
 
   link-not-set: "{prefix} The {label} link has not been set on the website yet."
   link-load-failed: "{prefix} Could not load the website links right now. Please try again shortly."
