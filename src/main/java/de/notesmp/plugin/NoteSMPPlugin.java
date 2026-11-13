@@ -333,14 +333,17 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             if (args.length == 0 || (args.length == 1 && args[0].equalsIgnoreCase("info"))) {
                 sendInfo(sender);
             } else if (args.length == 1 && args[0].equalsIgnoreCase("help")) {
-                sendCommandLines(sender, "Commands:", List.of("/notesmp info"));
+                sendCommandLines(sender, "Commands:", List.of(
+                        new String[] {"/notesmp info", "/notesmp info"}));
             } else if (args.length == 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("help")) {
                 if (!sender.hasPermission("notesmp.admin")) sendMessage(sender, "admin-permission-denied");
                 else sendCommandLines(sender, "Commands:", List.of(
-                        "/notesmp activitylog on|off",
-                        "/notesmp playerdata update|wipe <player>",
-                        "/notesmp update",
-                        "/notesmp version"));
+                        new String[] {"/notesmp activitylog on", "/notesmp activitylog on"},
+                        new String[] {"/notesmp activitylog off", "/notesmp activitylog off"},
+                        new String[] {"/notesmp playerdata update <player>", "/notesmp playerdata update "},
+                        new String[] {"/notesmp playerdata wipe <player>", "/notesmp playerdata wipe "},
+                        new String[] {"/notesmp update", "/notesmp update"},
+                        new String[] {"/notesmp version", "/notesmp version"}));
             } else if (args.length == 1 && args[0].equalsIgnoreCase("version")) {
                 if (sender.hasPermission("notesmp.update")) sendMessage(sender, "version", "version", getPluginMeta().getVersion());
                 else sendMessage(sender, "admin-permission-denied");
@@ -755,14 +758,20 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
         return lastPlayed > 0L && now - lastPlayed <= PLAYERDATA_ACTIVITY_WINDOW_MS;
     }
 
-    private void sendCommandLines(CommandSender sender, String heading, List<String> lines) {
+    private void sendCommandLines(CommandSender sender, String heading, List<String[]> commands) {
         String prefix = messages == null ? "§f[§eNote§6SMP§f]§r" : messages.getString("prefix", "§f[§eNote§6SMP§f]§r");
-        sender.sendMessage(prefix + " " + heading);
-        for (String line : lines) sender.sendMessage(line);
+        sender.sendMessage(LegacyComponentSerializer.legacySection().deserialize(prefix + " " + heading));
+        for (String[] command : commands) {
+            sender.sendMessage(Component.text(command[0], NamedTextColor.GRAY)
+                    .clickEvent(ClickEvent.suggestCommand(command[1])));
+        }
     }
 
     private void sendInfo(CommandSender sender) {
-        sendCommandLines(sender, "Info:", List.of("Season 1", "04.12.2026", "MC Java 26.3"));
+        sendCommandLines(sender, "Info:", List.of(
+                new String[] {"Season 1", ""},
+                new String[] {"04.12.2026", ""},
+                new String[] {"MC Java 26.3", ""}));
     }
 
     private void runPlayerDataUpdateFor(CommandSender requester, OfflinePlayer player) {
