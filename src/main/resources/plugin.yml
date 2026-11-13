@@ -7,7 +7,7 @@ authors: [NoteSMP]
 commands:
   notesmp:
     description: NoteSMP plugin utilities.
-    usage: /notesmp <updates|update|version|playerdata update|playerdata wipe|activitylog on|off>
+    usage: /notesmp [help|info|admin help|activitylog on|off|playerdata update|wipe <player>|update|version]
   verify:
     description: Link your Minecraft account to your NoteSMP Discord account.
     usage: /verify <six-digit-code>
@@ -37,6 +37,9 @@ commands:
     usage: /donate
     permission: notesmp.links
 permissions:
+  notesmp.admin:
+    description: Allows viewing the NoteSMP administrator command help.
+    default: op
   notesmp.update:
     description: Allows checking and staging NoteSMP plugin updates.
     default: op
