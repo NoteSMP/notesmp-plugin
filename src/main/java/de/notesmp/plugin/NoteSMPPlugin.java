@@ -338,10 +338,8 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             } else if (args.length == 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("help")) {
                 if (!sender.hasPermission("notesmp.admin")) sendMessage(sender, "admin-permission-denied");
                 else sendCommandLines(sender, "Commands:", List.<String[]>of(
-                        new String[] {"/notesmp activitylog on", "/notesmp activitylog on"},
-                        new String[] {"/notesmp activitylog off", "/notesmp activitylog off"},
-                        new String[] {"/notesmp playerdata update <player>", "/notesmp playerdata update "},
-                        new String[] {"/notesmp playerdata wipe <player>", "/notesmp playerdata wipe "},
+                        new String[] {"/notesmp activitylog on|off", "/notesmp activitylog"},
+                        new String[] {"/notesmp playerdata update|wipe <player>", "/notesmp playerdata"},
                         new String[] {"/notesmp update", "/notesmp update"},
                         new String[] {"/notesmp version", "/notesmp version"}));
             } else if (args.length == 1 && args[0].equalsIgnoreCase("version")) {
