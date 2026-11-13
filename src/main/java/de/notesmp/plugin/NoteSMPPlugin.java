@@ -333,11 +333,11 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
             if (args.length == 0 || (args.length == 1 && args[0].equalsIgnoreCase("info"))) {
                 sendInfo(sender);
             } else if (args.length == 1 && args[0].equalsIgnoreCase("help")) {
-                sendCommandLines(sender, "Commands:", List.of(
+                sendCommandLines(sender, "Commands:", List.<String[]>of(
                         new String[] {"/notesmp info", "/notesmp info"}));
             } else if (args.length == 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("help")) {
                 if (!sender.hasPermission("notesmp.admin")) sendMessage(sender, "admin-permission-denied");
-                else sendCommandLines(sender, "Commands:", List.of(
+                else sendCommandLines(sender, "Commands:", List.<String[]>of(
                         new String[] {"/notesmp activitylog on", "/notesmp activitylog on"},
                         new String[] {"/notesmp activitylog off", "/notesmp activitylog off"},
                         new String[] {"/notesmp playerdata update <player>", "/notesmp playerdata update "},
@@ -768,7 +768,7 @@ public final class NoteSMPPlugin extends JavaPlugin implements Listener, Command
     }
 
     private void sendInfo(CommandSender sender) {
-        sendCommandLines(sender, "Info:", List.of(
+        sendCommandLines(sender, "Info:", List.<String[]>of(
                 new String[] {"Season 1", ""},
                 new String[] {"04.12.2026", ""},
                 new String[] {"MC Java 26.3", ""}));
